@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
+
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -27,7 +29,7 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		elasticsearch, error := elasticsearch.NewElasticsearch(
+		elasticsearch, err := elasticsearch.NewElasticsearch(
 			viper.GetBool("ssl"),
 			viper.GetString("host"),
 			viper.GetInt("port"),
@@ -37,6 +39,16 @@ var rootCmd = &cobra.Command{
 			viper.GetString("proxy"),
 			viper.GetBool("socks"),
 		)
+		if err != nil {
+			log.Fatal().Msg("UNKNOWN: Could not create connection to Elasticsearch")
+			os.Exit(3)
+		}
+		result, err := elasticsearch.Search("schufa-sys-syslog-*", "{\"query\":{\"match\": {\"agent.hostname\":\"box-krn0-vbx-v01\"}}}")
+		if err != nil {
+			log.Fatal().Msg("UNKNOWN: Could not run search")
+			os.Exit(3)
+		}
+		spew.Dump(result)
 	},
 }
 
@@ -85,7 +97,7 @@ func init() {
 	viper.SetDefault("port", 9200)
 	viper.SetDefault("user", "")
 	viper.SetDefault("password", "")
-	viper.SetDefault("loglevel", 5)
+	viper.SetDefault("loglevel", "DEBUG")
 	viper.SetDefault("logfile", "")
 	viper.SetDefault("proxy", "")
 	viper.SetDefault("socks", false)
