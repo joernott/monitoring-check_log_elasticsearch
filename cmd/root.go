@@ -7,8 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
+	//"github.com/davecgh/go-spew/spew"
+	"github.com/olorin/nagiosplugin"
 
+	"github.com/joernott/monitoring-check_log_elasticsearch/check"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -18,17 +20,24 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gobana",
-	Short: "Gobana is a commandline kibana",
-	Long:  `A commandline kibana written in go`,
+	Use:   "check_log_elasticsearch",
+	Short: "Check logs stored in elasticsearch",
+	Long:  `check_log_elasticsearch checks log files stored in an elasticsearch cluster and allows for complex filters and multiple ways of collecting statistics.`,
 	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
 		setupLogging()
+		fmt.Println("Logging")
 		err := HandleConfigFile()
 		if err != nil {
+			fmt.Println("Config error")
 			panic(err)
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		var c *check.Check
+
+		nagios := nagiosplugin.NewCheck()
+		defer nagios.Finish()
+
 		elasticsearch, err := elasticsearch.NewElasticsearch(
 			viper.GetBool("ssl"),
 			viper.GetString("host"),
@@ -40,15 +49,23 @@ var rootCmd = &cobra.Command{
 			viper.GetBool("socks"),
 		)
 		if err != nil {
-			log.Fatal().Msg("UNKNOWN: Could not create connection to Elasticsearch")
-			os.Exit(3)
+			log.Fatal().Err(err).Msg("UNKNOWN: Could not create connection to Elasticsearch")
+			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not create connection to Elasticsearch")
+			return
 		}
-		result, err := elasticsearch.Search("schufa-sys-syslog-*", "{\"query\":{\"match\": {\"agent.hostname\":\"box-krn0-vbx-v01\"}}}")
+		c, err = check.NewCheck(viper.GetString("actionfile"), viper.GetString("statusfile"), elasticsearch, nagios)
 		if err != nil {
-			log.Fatal().Msg("UNKNOWN: Could not run search")
-			os.Exit(3)
+			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
+			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not create check")
+			return
 		}
-		spew.Dump(result)
+		err = c.Execute(viper.GetStringSlice("action"))
+		if err != nil {
+			log.Fatal().Msg("UNKNOWN: Could not execute check")
+			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not execute check")
+			return
+		}
+		return
 	},
 }
 
@@ -64,7 +81,8 @@ var LogFile string
 var Proxy string
 var ProxyIsSocks bool
 var ActionFile string
-var Action string
+var Action []string
+var StatusFile string
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -74,22 +92,20 @@ func Execute() {
 }
 
 func init() {
-	setupLogging()
-	//logger := log.With().Str("func", "rootCmd.Run").Str("package", "cmd").Logger()
-
-	rootCmd.PersistentFlags().StringVarP(&ConfigFile, "config", "c", "/etc/icinga2/check_log_elasticsearch.yaml", "Configuration file")
+	rootCmd.PersistentFlags().StringVarP(&ConfigFile, "config", "c", "", "Configuration file")
 	rootCmd.PersistentFlags().BoolVarP(&UseSSL, "ssl", "s", true, "Use SSL")
 	rootCmd.PersistentFlags().BoolVarP(&ValidateSSL, "validatessl", "v", true, "Validate SSL certificate")
 	rootCmd.PersistentFlags().StringVarP(&Host, "host", "H", "localhost", "Hostname of the server")
 	rootCmd.PersistentFlags().IntVarP(&Port, "port", "P", 9200, "Network port")
 	rootCmd.PersistentFlags().StringVarP(&User, "user", "u", "", "Username for Elasticsearch")
 	rootCmd.PersistentFlags().StringVarP(&Password, "password", "p", "", "Password for the Elasticsearch user")
-	rootCmd.PersistentFlags().StringVarP(&LogLevel, "loglevel", "l", "DEBUG", "Log level")
-	rootCmd.PersistentFlags().StringVarP(&LogFile, "logfile", "L", "", "Log file (defaults to stdout)")
+	rootCmd.PersistentFlags().StringVarP(&LogLevel, "loglevel", "l", "WARN", "Log level")
+	rootCmd.PersistentFlags().StringVarP(&LogFile, "logfile", "L", "/var/log/icinga2/check_log_elasticsearch.log", "Log file (use - to log to stdout)")
 	rootCmd.PersistentFlags().StringVarP(&Proxy, "proxy", "y", "", "Proxy (defaults to none)")
 	rootCmd.PersistentFlags().BoolVarP(&ProxyIsSocks, "socks", "Y", false, "This is a SOCKS proxy")
-	rootCmd.PersistentFlags().StringVarP(&ActionFile, "actionfile", "f", "/etc/icinga2/check_log/elasticsearch/actions.yaml", "Action file")
-	rootCmd.PersistentFlags().StringVarP(&Action, "action", "a", "", "Action (default is all, if empty)")
+	rootCmd.PersistentFlags().StringVarP(&ActionFile, "actionfile", "f", "/etc/icinga2/check_log_elasticsearch/actions.yaml", "Action file")
+	rootCmd.PersistentFlags().StringSliceVarP(&Action, "action", "a", []string{}, "Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)")
+	rootCmd.PersistentFlags().StringVarP(&StatusFile, "statusfile", "t", "/var/cache/icinga2/check_log_elasticsearch/status", "File to remember the last status for an action, the name of the action will be appendend")
 
 	viper.SetDefault("ssl", false)
 	viper.SetDefault("validatessl", true)
@@ -97,12 +113,13 @@ func init() {
 	viper.SetDefault("port", 9200)
 	viper.SetDefault("user", "")
 	viper.SetDefault("password", "")
-	viper.SetDefault("loglevel", "DEBUG")
-	viper.SetDefault("logfile", "")
+	viper.SetDefault("loglevel", "WARN")
+	viper.SetDefault("logfile", "/var/log/icinga2/check_log_elasticsearch.log")
 	viper.SetDefault("proxy", "")
 	viper.SetDefault("socks", false)
-	viper.SetDefault("actionfile", "")
+	viper.SetDefault("actionfile", "/etc/icinga2/check_log_elasticsearch/actions.yaml")
 	viper.SetDefault("action", "")
+	viper.SetDefault("statusfile", "/var/cache/icinga2/check_log_elasticsearch/status.txt")
 
 	viper.BindPFlag("ssl", rootCmd.PersistentFlags().Lookup("ssl"))
 	viper.BindPFlag("validatessl", rootCmd.PersistentFlags().Lookup("validatessl"))
@@ -116,6 +133,7 @@ func init() {
 	viper.BindPFlag("socks", rootCmd.PersistentFlags().Lookup("socks"))
 	viper.BindPFlag("actionfile", rootCmd.PersistentFlags().Lookup("actionfile"))
 	viper.BindPFlag("action", rootCmd.PersistentFlags().Lookup("action"))
+	viper.BindPFlag("statusfile", rootCmd.PersistentFlags().Lookup("statusfile"))
 
 	viper.SetEnvPrefix("cle")
 	viper.BindEnv("password")
@@ -139,11 +157,12 @@ func HandleConfigFile() error {
 func setupLogging() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	var output io.Writer
-	if LogFile == "-" {
+	logfile := viper.GetString("logfile")
+	if logfile == "-" {
 		output = os.Stdout
 	} else {
 		output = &lumberjack.Logger{
-			Filename:   LogFile,
+			Filename:   logfile,
 			MaxBackups: 10,
 			MaxAge:     1,
 			Compress:   true,
@@ -151,7 +170,7 @@ func setupLogging() {
 	}
 	log.Logger = zerolog.New(output).With().Timestamp().Logger()
 
-	switch strings.ToUpper(LogLevel) {
+	switch strings.ToUpper(viper.GetString("loglevel")) {
 	case "DEBUG":
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	case "INFO":

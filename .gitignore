@@ -1,0 +1,5 @@
+timestamp.txt
+*.yaml
+*.ndjson
+monitoring-check_log_elasticsearch.exe
+monitoring-check_log_elasticsearch
