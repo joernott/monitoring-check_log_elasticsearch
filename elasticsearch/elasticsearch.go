@@ -44,6 +44,7 @@ type ElasticsearchHitList struct {
 	Id     string     `json:"_id"`
 	Score  float64    `json:"_score"`
 	Source HitElement `json:"_source"`
+	Fields HitElement `json:"fields"`
 }
 
 type ElasticsearchHitTotal struct {

@@ -112,10 +112,10 @@ func readActionFile(ActionFile string) (*Actions, error) {
 	var actions *Actions
 	logger := log.With().Str("func", "readActionFile").Str("package", "check").Logger()
 
-	logger.Debug().Str("id", "DBG20010001").Str("file", ActionFile).Msg("Read action file")
+	logger.Debug().Str("id", "DBG20010001").Str("filename", ActionFile).Msg("Read action file")
 	f, err := ioutil.ReadFile(ActionFile)
 	if err != nil {
-		logger.Fatal().Str("id", "ERR20010001").Err(err).Str("file", ActionFile).Msg("Failed to read action file")
+		logger.Fatal().Str("id", "ERR20010001").Err(err).Str("filename", ActionFile).Msg("Failed to read action file")
 		return nil, err
 	}
 	actions = new(Actions)
@@ -138,17 +138,18 @@ func (c *Check) Execute(Actions []string) error {
 				Msg("Search not in requested actions, skipping")
 			continue
 		}
-		statusFile := c.statusFile + "_" + s.Name
-		timestamp, err := readTimestamp(statusFile)
+		statusFile := c.statusFile + "_" + s.Name + ".yaml"
+		status, err := ReadStatus(statusFile)
 		if err != nil {
 			logger.Error().
 				Str("id", "ERR20000003").
 				Str("filename", statusFile).
 				Err(err).
-				Msg("Error reading timestamp from statusfile")
+				Msg("Error reading statusfile")
 			c.nagios.AddResult(nagiosplugin.UNKNOWN, "Error reading timestamp from "+statusFile)
 			return err
 		}
+		timestamp := status.Timestamp
 
 		logger.Debug().Str("id", "DBG20020001").
 			Str("name", s.Name).
@@ -175,7 +176,8 @@ func (c *Check) Execute(Actions []string) error {
 		if err != nil {
 			return err
 		}
-		err = saveTimestamp(timestamp, statusFile)
+		status.Timestamp = timestamp
+		err = status.Save(statusFile)
 		if err != nil {
 			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("Could not save last timestamp %v to %v, error %v", timestamp, statusFile, err))
 			return err
@@ -186,7 +188,6 @@ func (c *Check) Execute(Actions []string) error {
 }
 
 func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string, RuleCount, error) {
-	var found bool
 	logger := log.With().Str("func", "countResults").Str("package", "check").Logger()
 	rulecount := make(RuleCount)
 	rulecount["_total"] = 0
@@ -212,15 +213,20 @@ func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string,
 		if !matches {
 			rulecount["_nomatch"]++
 		}
-		last_timestamp, found = hit.Source.Get("@timestamp")
-		if !found {
-			err := errors.New("Document is missing field @timestamp")
-			logger.Error().Str("id", "ERR20030001").
-				Str("field", "@timestamp").
-				Err(err).
-				Msg("Unsuitable data")
+		lt, found := hit.Fields.Get("@timestamp")
+		if found {
+			last_timestamp = strings.Replace(strings.Replace(lt, "[", "", -1), "]", "", -1)
+		} else {
+			last_timestamp, found = hit.Source.Get("@timestamp")
+			if !found {
+				err := errors.New("Document is missing field @timestamp")
+				logger.Error().Str("id", "ERR20030001").
+					Str("field", "@timestamp").
+					Err(err).
+					Msg("Unsuitable data")
 
-			return "", nil, err
+				return "", nil, err
+			}
 		}
 	}
 	return last_timestamp, rulecount, nil
@@ -300,7 +306,7 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 	return found, nil
 }
 
-func saveTimestamp(ts string, filename string) error {
+func savexTimestamp(ts string, filename string) error {
 	logger := log.With().Str("func", "saveTimestamp").Str("package", "check").Logger()
 
 	if ts == "" {
@@ -325,7 +331,7 @@ func saveTimestamp(ts string, filename string) error {
 	return nil
 }
 
-func readTimestamp(filename string) (string, error) {
+func readxTimestamp(filename string) (string, error) {
 	var timestamp string
 	logger := log.With().Str("func", "readTimestamp").Str("package", "check").Logger()
 
@@ -403,7 +409,7 @@ func (a Action) outputResults(nagios *nagiosplugin.Check, rulecount RuleCount) e
 		}
 		nagios.AddPerfDatum(metric_name, "c", float64(rulecount[rulename]), math.Inf(1), math.Inf(1), rule.warnRange.End, rule.critRange.End)
 	}
-	nagios.AddPerfDatum("lines", "c", float64(rulecount["_total"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
-	nagios.AddPerfDatum("not_matched", "c", float64(rulecount["_nomatch"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
+	nagios.AddPerfDatum(a.Name+"_lines", "c", float64(rulecount["_total"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
+	nagios.AddPerfDatum(a.Name+"_not_matched", "c", float64(rulecount["_nomatch"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
 	return nil
 }
