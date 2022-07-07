@@ -3,6 +3,8 @@ module github.com/joernott/monitoring-check_log_elasticsearch
 go 1.16
 
 require (
+	github.com/davecgh/go-spew v1.1.1
+	github.com/google/uuid v1.1.2
 	github.com/olorin/nagiosplugin v1.2.0
 	github.com/pelletier/go-toml/v2 v2.0.2 // indirect
 	github.com/rs/zerolog v1.27.0

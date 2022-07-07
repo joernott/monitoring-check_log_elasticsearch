@@ -6,8 +6,8 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
-	//"github.com/davecgh/go-spew/spew"
 	"github.com/olorin/nagiosplugin"
 
 	"github.com/joernott/monitoring-check_log_elasticsearch/check"
@@ -25,7 +25,6 @@ var rootCmd = &cobra.Command{
 	Long:  `check_log_elasticsearch checks log files stored in an elasticsearch cluster and allows for complex filters and multiple ways of collecting statistics.`,
 	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
 		setupLogging()
-		fmt.Println("Logging")
 		err := HandleConfigFile()
 		if err != nil {
 			fmt.Println("Config error")
@@ -37,6 +36,13 @@ var rootCmd = &cobra.Command{
 
 		nagios := nagiosplugin.NewCheck()
 		defer nagios.Finish()
+		nagios.AddResult(nagiosplugin.OK, "All systems are functioning within normal parameters")
+
+		parsedTimeout, err := parseTimeout(viper.GetString("timeout"))
+		if err != nil {
+			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not parse timeout")
+			return
+		}
 
 		elasticsearch, err := elasticsearch.NewElasticsearch(
 			viper.GetBool("ssl"),
@@ -47,6 +53,7 @@ var rootCmd = &cobra.Command{
 			viper.GetBool("validatessl"),
 			viper.GetString("proxy"),
 			viper.GetBool("socks"),
+			parsedTimeout,
 		)
 		if err != nil {
 			log.Fatal().Err(err).Msg("UNKNOWN: Could not create connection to Elasticsearch")
@@ -83,6 +90,8 @@ var ProxyIsSocks bool
 var ActionFile string
 var Action []string
 var StatusFile string
+var Timeout string
+var Uuid []string
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -106,6 +115,10 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&ActionFile, "actionfile", "f", "/etc/icinga2/check_log_elasticsearch/actions.yaml", "Action file")
 	rootCmd.PersistentFlags().StringSliceVarP(&Action, "action", "a", []string{}, "Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)")
 	rootCmd.PersistentFlags().StringVarP(&StatusFile, "statusfile", "t", "/var/cache/icinga2/check_log_elasticsearch/status", "File to remember the last status for an action, the name of the action will be appendend")
+	rootCmd.PersistentFlags().StringVarP(&Timeout, "timeout", "T", "2m", "Timeout understood by time.ParseDuration")
+	clearCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Clear entry with the given uuid from history")
+
+	rootCmd.AddCommand(clearCmd)
 
 	viper.SetDefault("ssl", false)
 	viper.SetDefault("validatessl", true)
@@ -120,6 +133,8 @@ func init() {
 	viper.SetDefault("actionfile", "/etc/icinga2/check_log_elasticsearch/actions.yaml")
 	viper.SetDefault("action", "")
 	viper.SetDefault("statusfile", "/var/cache/icinga2/check_log_elasticsearch/status.txt")
+	viper.SetDefault("timeout", "2m")
+	viper.SetDefault("uuid", []string{})
 
 	viper.BindPFlag("ssl", rootCmd.PersistentFlags().Lookup("ssl"))
 	viper.BindPFlag("validatessl", rootCmd.PersistentFlags().Lookup("validatessl"))
@@ -134,6 +149,8 @@ func init() {
 	viper.BindPFlag("actionfile", rootCmd.PersistentFlags().Lookup("actionfile"))
 	viper.BindPFlag("action", rootCmd.PersistentFlags().Lookup("action"))
 	viper.BindPFlag("statusfile", rootCmd.PersistentFlags().Lookup("statusfile"))
+	viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
+	viper.BindPFlag("uuid", clearCmd.PersistentFlags().Lookup("uuid"))
 
 	viper.SetEnvPrefix("cle")
 	viper.BindEnv("password")
@@ -146,7 +163,7 @@ func HandleConfigFile() error {
 		viper.SetConfigFile(ConfigFile)
 
 		if err := viper.ReadInConfig(); err != nil {
-			logger.Error().Err(err)
+			logger.Error().Err(err).Msg("Could not read config file")
 			return err
 		}
 	}
@@ -171,6 +188,8 @@ func setupLogging() {
 	log.Logger = zerolog.New(output).With().Timestamp().Logger()
 
 	switch strings.ToUpper(viper.GetString("loglevel")) {
+	case "TRACE":
+		zerolog.SetGlobalLevel(zerolog.TraceLevel)
 	case "DEBUG":
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	case "INFO":
@@ -189,4 +208,14 @@ func setupLogging() {
 		os.Exit(3)
 	}
 	log.Debug().Str("id", "DBG00001").Str("func", "setupLogging").Str("logfile", LogFile).Msg("Logging to " + LogFile)
+}
+
+func parseTimeout(timeout string) (time.Duration, error) {
+	logger := log.With().Str("func", "rootCmd.parseTimeout").Str("package", "cmd").Logger()
+	t, err := time.ParseDuration(timeout)
+	if err != nil {
+		logger.Error().Err(err).Str("timeout", timeout).Msg("Could not parse timeout")
+		return t, err
+	}
+	return t, nil
 }

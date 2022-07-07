@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	//"github.com/davecgh/go-spew/spew"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
 	"github.com/olorin/nagiosplugin"
 	"github.com/rs/zerolog/log"
@@ -30,10 +31,14 @@ type Actions struct {
 
 type Action struct {
 	Name           string          `json:"name" yaml:"name"`
+	History        uint64          `json:"history" yaml:"history"`
 	Index          string          `json:"index" yaml:"index"`
 	Query          string          `json:"query" yaml:"query"`
 	Rules          map[string]Rule `json:"rule" yaml:"rules"`
+	Limit          uint            `json:"limit" yaml:"limit"`
 	last_timestamp string
+	results        RuleCount
+	StatusData     *StatusData
 }
 
 type Rule struct {
@@ -60,7 +65,7 @@ func NewCheck(ActionsFile string, StatusFile string, Connection *elasticsearch.E
 	var actions *Actions
 	var c *Check
 	logger := log.With().Str("func", "NewCheck").Str("package", "check").Logger()
-
+	logger.Trace().Msg("Enter func")
 	c = new(Check)
 	c.actionsFile = ActionsFile
 	c.statusFile = StatusFile
@@ -102,6 +107,7 @@ func NewCheck(ActionsFile string, StatusFile string, Connection *elasticsearch.E
 			}
 			actions.Actions[i].Rules[rulename] = r
 		}
+		actions.Actions[i].results = actions.Actions[i].newRulecount()
 	}
 	c.actions = actions
 
@@ -111,6 +117,7 @@ func NewCheck(ActionsFile string, StatusFile string, Connection *elasticsearch.E
 func readActionFile(ActionFile string) (*Actions, error) {
 	var actions *Actions
 	logger := log.With().Str("func", "readActionFile").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
 
 	logger.Debug().Str("id", "DBG20010001").Str("filename", ActionFile).Msg("Read action file")
 	f, err := ioutil.ReadFile(ActionFile)
@@ -129,17 +136,19 @@ func readActionFile(ActionFile string) (*Actions, error) {
 
 func (c *Check) Execute(Actions []string) error {
 	logger := log.With().Str("func", "Execute").Str("package", "check").Logger()
-	for _, s := range c.actions.Actions {
-		if !actionInList(s.Name, Actions) {
+	logger.Trace().Msg("Enter func")
+
+	for ac, a := range c.actions.Actions {
+		if !actionInList(a.Name, Actions) {
 			logger.Debug().Str("id", "DBG20020001").
-				Str("name", s.Name).
-				Str("index", s.Index).
-				Str("query", s.Query).
+				Str("name", a.Name).
+				Str("index", a.Index).
+				Str("query", a.Query).
 				Msg("Search not in requested actions, skipping")
 			continue
 		}
-		statusFile := c.statusFile + "_" + s.Name + ".yaml"
-		status, err := ReadStatus(statusFile)
+		statusFile := c.statusFile + "_" + a.Name + ".yaml"
+		s, err := ReadStatus(statusFile)
 		if err != nil {
 			logger.Error().
 				Str("id", "ERR20000003").
@@ -149,69 +158,96 @@ func (c *Check) Execute(Actions []string) error {
 			c.nagios.AddResult(nagiosplugin.UNKNOWN, "Error reading timestamp from "+statusFile)
 			return err
 		}
-		timestamp := status.Timestamp
+		c.actions.Actions[ac].StatusData = s
+		timestamp := s.Timestamp
 
 		logger.Debug().Str("id", "DBG20020001").
-			Str("name", s.Name).
-			Str("index", s.Index).
-			Str("query", s.Query).
+			Str("name", a.Name).
+			Str("index", a.Index).
+			Str("query", a.Query).
 			Str("timestamp", timestamp).
 			Msg("Run search")
-		q := strings.ReplaceAll(s.Query, "_TIMESTAMP_", timestamp)
-		result, err := c.connection.Search(s.Index, q)
+		q := strings.ReplaceAll(a.Query, "_TIMESTAMP_", timestamp)
+		pagination, err := c.connection.StartPaginatedSearch(a.Index, q)
 		if err != nil {
 			logger.Error().Str("id", "ERR20020001").
-				Str("name", s.Name).
-				Str("index", s.Index).
-				Str("query", s.Query).
+				Str("name", a.Name).
+				Str("index", a.Index).
+				Str("query", a.Query).
 				Str("timestamp", timestamp).
 				Str("parsed_query", q).
-				Str("reason", result.Error.Reason).
+				Int("page", 0).
+				Str("reason", pagination.Results[0].Error.Reason).
 				Err(err).
-				Msg("Could not run search '" + s.Name + "'")
-			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("%v. Could not run search %v on index %v. Query is %v", err, s.Name, s.Index, s.Query))
+				Msg("Could not run search '" + a.Name + "'")
+			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("%v. Could not initiate paginated search %v on index %v. Query is %v", err, a.Name, a.Index, a.Query))
 			return err
 		}
-		timestamp, rulecount, err := s.countResults(result)
+		timestamp, err = a.countResults(pagination.Results[0])
 		if err != nil {
 			return err
 		}
-		status.Timestamp = timestamp
-		err = status.Save(statusFile)
-		if err != nil {
-			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("Could not save last timestamp %v to %v, error %v", timestamp, statusFile, err))
-			return err
+		c.actions.Actions[ac].StatusData.Timestamp = timestamp
+		hc := len(pagination.Results[0].Hits.Hits)
+		if hc < int(pagination.Pagination.Size) {
+			logger.Info().Str("id", "INF20020001").Int("page", 0).Int("hits", hc).Str("timestamp", timestamp).Msg("Only page")
+			break
 		}
-		s.outputResults(c.nagios, rulecount)
+		logger.Info().Str("id", "INF20020001").Int("page", 0).Int("hits", hc).Str("timestamp", timestamp).Msg("First page")
+		defer pagination.Close()
+		for page := 0; page < int(a.Limit); page++ {
+			err = pagination.Next()
+			if err != nil {
+				logger.Error().Str("id", "ERR20020002").
+					Str("name", a.Name).
+					Str("index", a.Index).
+					Str("query", a.Query).
+					Str("timestamp", timestamp).
+					Str("parsed_query", q).
+					Int("page", page).
+					Str("reason", pagination.Results[len(pagination.Results)-1].Error.Reason).
+					Err(err).
+					Msg("Could not run paginated '" + a.Name + "'")
+				c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("%v. Could not run paginated search %v #%v on index %v. Query is %v", err, a.Name, page, a.Index, a.Query))
+				return err
+			}
+			timestamp, err = a.countResults(pagination.Results[len(pagination.Results)-1])
+			if err != nil {
+				return err
+			}
+			c.actions.Actions[ac].StatusData.Timestamp = timestamp
+			hc := len(pagination.Results[len(pagination.Results)-1].Hits.Hits)
+			if hc < int(pagination.Pagination.Size) {
+				logger.Info().Str("id", "INF20020001").Int("page", page).Int("hits", hc).Str("timestamp", timestamp).Msg("Last page")
+				break
+			}
+			logger.Info().Str("id", "INF20020001").Int("page", page).Int("hits", hc).Str("timestamp", timestamp).Msg("Next page")
+		}
 	}
+	c.outputAll()
 	return nil
 }
 
-func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string, RuleCount, error) {
+func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string, error) {
 	logger := log.With().Str("func", "countResults").Str("package", "check").Logger()
-	rulecount := make(RuleCount)
-	rulecount["_total"] = 0
-	rulecount["_nomatch"] = 0
+	logger.Trace().Msg("Enter func")
 	last_timestamp := ""
 	for _, hit := range result.Hits.Hits {
-		rulecount["_total"]++
+		s.results["_total"]++
 		matches := false
 		for rulename, rule := range s.Rules {
-			logger.Debug().Str("id", "DBG20030001").Str("rule", rulename).Msg("Apply Rule")
 			match, err := rule.isMatch(hit.Source)
 			if err != nil {
-				return "", nil, err
+				return "", err
 			}
-			logger.Debug().Str("id", "DBG20030001").Str("rule", rulename).Bool("match", match).Msg("Apply Rule")
+			logger.Trace().Str("id", "DBG20030001").Str("rule", rulename).Bool("match", match).Msg("Apply Rule")
 			if match {
 				matches = true
-				rulecount[rulename]++
-			} else {
-				rulecount[rulename] += 0
+				s.results[rulename]++
 			}
 		}
 		if !matches {
-			rulecount["_nomatch"]++
+			s.results["_nomatch"]++
 		}
 		lt, found := hit.Fields.Get("@timestamp")
 		if found {
@@ -225,15 +261,16 @@ func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string,
 					Err(err).
 					Msg("Unsuitable data")
 
-				return "", nil, err
+				return "", err
 			}
 		}
 	}
-	return last_timestamp, rulecount, nil
+	return last_timestamp, nil
 }
 
 func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 	logger := log.With().Str("func", "isMatch").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
 	found := false
 	except := false
 	first := true
@@ -243,7 +280,7 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 			break
 		}
 		match, err := regexp.MatchString(p.Regex, s)
-		logger.Debug().Str("id", "DBG20040001").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Msg("Checking pattern")
+		logger.Trace().Str("id", "DBG20040001").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Msg("Checking pattern")
 		if err != nil {
 			logger.Error().Str("id", "ERR20040001").
 				Str("field", s).
@@ -256,19 +293,19 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 			if first {
 				found = match
 				first = false
-				logger.Debug().Str("id", "DBG20040002").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Bool("found", found).Bool("first", true).Bool("use_and", r.UseAnd).Msg("Result first and")
+				logger.Trace().Str("id", "DBG20040002").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Bool("found", found).Bool("first", true).Bool("use_and", r.UseAnd).Msg("Result first and")
 			} else {
 				found = found && match
-				logger.Debug().Str("id", "DBG20040003").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Bool("found", found).Bool("first", false).Bool("use_and", r.UseAnd).Msg("Result not first and")
+				logger.Trace().Str("id", "DBG20040003").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Bool("found", found).Bool("first", false).Bool("use_and", r.UseAnd).Msg("Result not first and")
 			}
 		} else {
 			found = match
-			logger.Debug().Str("id", "DBG20040004").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Bool("found", found).Bool("first", first).Bool("use_and", r.UseAnd).Msg("Result or")
+			logger.Trace().Str("id", "DBG20040004").Str("field", p.Field).Str("value", s).Str("regex", p.Regex).Bool("match", match).Bool("found", found).Bool("first", first).Bool("use_and", r.UseAnd).Msg("Result or")
 			break
 		}
 	}
 	if !found {
-		logger.Debug().Str("id", "DBG20040005").Bool("found", found).Msg("Skip exception check")
+		logger.Trace().Str("id", "DBG20040005").Bool("found", found).Msg("Skip exception check")
 		return found, nil
 	}
 	first = true
@@ -279,7 +316,7 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 		}
 		b := []byte(s)
 		match, err := regexp.Match(e.Regex, b)
-		logger.Debug().Str("id", "DBG20040002").Str("field", e.Field).Str("value", s).Str("regex", e.Regex).Bool("except", match).Msg("Checking exclude")
+		logger.Trace().Str("id", "DBG20040006").Str("field", e.Field).Str("value", s).Str("regex", e.Regex).Bool("except", match).Msg("Checking exclude")
 		if err != nil {
 			logger.Error().Str("id", "ERR20040002").
 				Str("field", s).
@@ -288,15 +325,9 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 				Msg("Could not match regex")
 			return false, err
 		}
-		if r.UseAnd {
-			if first {
-				except = match
-				first = false
-			} else {
-				found = found && match
-			}
-		} else {
-			except = match
+		except = match
+		if except {
+			logger.Trace().Str("id", "DBG20040007").Str("field", e.Field).Str("value", s).Str("regex", e.Regex).Bool("except", match).Msg("Hit exception for rule")
 			break
 		}
 	}
@@ -304,55 +335,6 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 		return false, nil
 	}
 	return found, nil
-}
-
-func savexTimestamp(ts string, filename string) error {
-	logger := log.With().Str("func", "saveTimestamp").Str("package", "check").Logger()
-
-	if ts == "" {
-		logger.Debug().Str("id", "DBG2005001").Msg("Skipped writing empty timestamp to file")
-		return nil
-	}
-
-	f, err := os.Create(filename)
-
-	if err != nil {
-		logger.Error().Str("id", "ERR2005001").Str("filename", filename).Err(err).Msg("Could not create file")
-		return err
-	}
-	defer f.Close()
-
-	_, err = f.WriteString(ts)
-	if err != nil {
-		logger.Error().Str("id", "ERR2005002").Str("filename", filename).Err(err).Msg("Could not create file")
-		return err
-	}
-	logger.Debug().Str("id", "DBG2005002").Str("timestamp", ts).Str("filename", filename).Msg("Wrote timestamp to file")
-	return nil
-}
-
-func readxTimestamp(filename string) (string, error) {
-	var timestamp string
-	logger := log.With().Str("func", "readTimestamp").Str("package", "check").Logger()
-
-	if _, err := os.Stat(filename); err == nil {
-		ts, err := os.ReadFile(filename)
-		if err != nil {
-			logger.Error().Str("id", "ERR2006001").Str("filename", filename).Err(err).Msg("Could not read from file")
-			return "", err
-		}
-		timestamp = string(ts[:])
-		logger.Debug().Str("id", "DBG2006001").Str("timestamp", timestamp).Str("filename", filename).Msg("Read timestamp from file")
-	} else if errors.Is(err, os.ErrNotExist) {
-		timestamp = "1900-01-01T00:00:00.000Z"
-		logger.Debug().Str("id", "DBG2006002").Str("timestamp", timestamp).Str("filename", filename).Msg("No state file found, using default start date")
-
-	} else {
-		logger.Error().Str("id", "ERR2006002").Str("filename", filename).Err(err).Msg("Could not stat file")
-		// Schrodinger: file may or may not exist. See err for details.
-		return "", err
-	}
-	return timestamp, nil
 }
 
 func actionInList(action string, list []string) bool {
@@ -367,49 +349,123 @@ func actionInList(action string, list []string) bool {
 	return false
 }
 
-func (a Action) outputResults(nagios *nagiosplugin.Check, rulecount RuleCount) error {
+func (a Action) outputResults(nagios *nagiosplugin.Check) error {
 	logger := log.With().Str("func", "outputResults").Str("package", "check").Logger()
-
+	logger.Trace().Msg("Enter func")
+	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	for rulename, rule := range a.Rules {
-		if rule.critRange.CheckUint64(rulecount[rulename]) {
+		if rule.critRange.CheckUint64(a.results[rulename]) {
 			logger.Debug().
 				Str("id", "DBG20080001").
 				Str("search", a.Name).
 				Str("rule", rulename).
 				Str("threshold", rule.Critical).
 				Str("type", "critical").
-				Uint64("value", rulecount[rulename]).
+				Uint64("value", a.results[rulename]).
 				Msg("Critical threshold reached")
-			nagios.AddResult(nagiosplugin.CRITICAL, fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", rulecount[rulename], rulename, a.Name, rule.Critical))
+			nagios.AddResult(nagiosplugin.CRITICAL, fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", a.results[rulename], rulename, a.Name, rule.Critical))
+			a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.CRITICAL), rulename, a.results[rulename])
 		} else {
-			if rule.warnRange.CheckUint64(rulecount[rulename]) {
+			if rule.warnRange.CheckUint64(a.results[rulename]) {
 				logger.Debug().
 					Str("id", "DBG20080002").
 					Str("search", a.Name).
 					Str("rule", rulename).
 					Str("threshold", rule.Warning).
 					Str("type", "warning").
-					Uint64("value", rulecount[rulename]).
+					Uint64("value", a.results[rulename]).
 					Msg("Warning threshold reached")
-				nagios.AddResult(nagiosplugin.WARNING, fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", rulecount[rulename], rulename, a.Name, rule.Warning))
+				nagios.AddResult(nagiosplugin.WARNING, fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", a.results[rulename], rulename, a.Name, rule.Warning))
+				a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.WARNING), rulename, a.results[rulename])
 			} else {
 				logger.Debug().
 					Str("id", "DBG20080003").
 					Str("search", a.Name).
 					Str("rule", rulename).
 					Str("type", "ok").
-					Uint64("value", rulecount[rulename]).
+					Uint64("value", a.results[rulename]).
 					Msg("No threshold reached")
-				nagios.AddResult(nagiosplugin.OK, fmt.Sprintf("Value %v for rule %v in search %v is within thresholds %v,%v	", rulecount[rulename], rulename, a.Name, rule.Warning, rule.Critical))
+				nagios.AddResult(nagiosplugin.OK, fmt.Sprintf("Value %v for rule %v in search %v is within thresholds %v,%v	", a.results[rulename], rulename, a.Name, rule.Warning, rule.Critical))
 			}
 		}
 		metric_name := rule.MetricName
 		if metric_name == "" {
 			metric_name = rulename
 		}
-		nagios.AddPerfDatum(metric_name, "c", float64(rulecount[rulename]), math.Inf(1), math.Inf(1), rule.warnRange.End, rule.critRange.End)
+		nagios.AddPerfDatum(metric_name, "c", float64(a.results[rulename]), math.Inf(1), math.Inf(1), rule.warnRange.End, rule.critRange.End)
 	}
-	nagios.AddPerfDatum(a.Name+"_lines", "c", float64(rulecount["_total"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
-	nagios.AddPerfDatum(a.Name+"_not_matched", "c", float64(rulecount["_nomatch"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
+	nagios.AddPerfDatum(a.Name+"_lines", "c", float64(a.results["_total"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
+	nagios.AddPerfDatum(a.Name+"_not_matched", "c", float64(a.results["_nomatch"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
+	return nil
+}
+
+func (c Check) outputAll() error {
+	for _, a := range c.actions.Actions {
+		if a.History > 0 {
+			spew.Dump(a.StatusData)
+			a.StatusData.Prune(a.History)
+		}
+		err := a.outputResults(c.nagios)
+		if err != nil {
+			return err
+		}
+		statusFile := c.statusFile + "_" + a.Name + ".yaml"
+		err = a.StatusData.Save(statusFile)
+		if err != nil {
+			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("Could not save last timestamp %v to %v, error %v", a.StatusData.Timestamp, statusFile, err))
+			return err
+		}
+	}
+	return nil
+}
+
+func (a Action) newRulecount() RuleCount {
+	rulecount := make(RuleCount)
+	for rulename := range a.Rules {
+		rulecount[rulename] = 0
+	}
+	rulecount["_total"] = 0
+	rulecount["_nomatch"] = 0
+	return rulecount
+}
+
+func (c *Check) GetAction(Name string) (Action, error) {
+	logger := log.With().Str("func", "GetAction").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
+	for _, a := range c.actions.Actions {
+		if a.Name == Name {
+			return a, nil
+		}
+	}
+	err := errors.New("Action " + Name + "not found")
+	logger.Error().Str("id", "ERR20110001").Str("name", Name).Err(err).Msg("Get action failed")
+	return Action{}, err
+}
+
+func (c *Check) ClearHistory(Actions []string, Uuids []string) error {
+	logger := log.With().Str("func", "ClearHistory").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
+	for _, a := range c.actions.Actions {
+		if !actionInList(a.Name, Actions) {
+			logger.Debug().Str("id", "DBG20120001").
+				Str("name", a.Name).
+				Str("index", a.Index).
+				Str("query", a.Query).
+				Msg("Search not in requested actions, skipping")
+			continue
+		}
+		statusFile := c.statusFile + "_" + a.Name + ".yaml"
+		s, err := ReadStatus(statusFile)
+		if err != nil {
+			log.Error().Str("id", "20120001").Str("filename", statusFile).Err(err).Msg("Could not read status file")
+			return err
+		}
+		logger.Debug().Str("id", "DBG20120002").Str("filename", statusFile).Msg("Read status file")
+		s.RemoveHistoryEntry(Uuids)
+		err = s.Save(statusFile)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
