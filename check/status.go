@@ -2,6 +2,7 @@ package check
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"time"
@@ -29,6 +30,7 @@ type StatusHistory struct {
 
 func (data *StatusData) Save(Filename string) error {
 	logger := log.With().Str("func", "StatusData.Save").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
 
 	if data.Timestamp == "" {
 		logger.Debug().Str("id", "DBG2101001").Msg("Skipped writing empty timestamp to file")
@@ -60,6 +62,8 @@ func ReadStatus(Filename string) (*StatusData, error) {
 	var data *StatusData
 
 	logger := log.With().Str("func", "readStatus").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
+
 	data = new(StatusData)
 
 	if _, err := os.Stat(Filename); err == nil {
@@ -107,6 +111,8 @@ func (status *StatusData) Acknowledge(Uuid string) {
 
 func (status *StatusData) Prune(Retention uint64) {
 	logger := log.With().Str("func", "status.Prune").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
+
 	format := "2006-01-02T15:04:05.000Z"
 	var new []StatusHistory
 	for _, h := range status.History {
@@ -124,7 +130,10 @@ func (status *StatusData) Prune(Retention uint64) {
 
 func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 	var new []StatusHistory
+
 	logger := log.With().Str("func", "status.RemoveHistoryEntry").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
+
 	for _, h := range status.History {
 		found := false
 		for _, u := range Uuids {
@@ -141,4 +150,55 @@ func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 		}
 	}
 	status.History = new
+}
+
+func (status *StatusData) HandleHistoryEntry(Uuids []string) {
+	var new []StatusHistory
+
+	logger := log.With().Str("func", "status.RemoveHistoryEntry").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
+
+	for _, h := range status.History {
+		found := false
+		for _, u := range Uuids {
+			if h.Uuid == u {
+				logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Removing uuid")
+				found = true
+				break
+			} else {
+				logger.Trace().Str("id", "DBG1006002").Str("uuid", u).Str("compare_to", h.Uuid).Msg("No match")
+			}
+		}
+		if !found {
+			h.Handled=true
+		}
+		new = append(new, h)
+	}
+	status.History = new
+}
+
+func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionFormat string) {
+	logger := log.With().Str("func", "status.PrintHistory").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
+
+	if Format == "" {
+		Format = "%-36s %-24s %-8s %6d %1s %-16s\n"
+	}
+	if CaptionFormat == "" {
+		CaptionFormat = "%-36s %-24s %-8s %-1s %6s %-16s\n"
+	}
+
+	states := [4]string{"OK", "WARNING", "CRITICAL", "UNKNOWN"}
+	if Caption {
+		fmt.Printf(CaptionFormat, "UUID", "Date/Time", "State", "#", "Handled", "Rule")
+	}
+	logger.Trace().Int("count", len(status.History)).Msg("Entries to list")
+
+	for _, h := range status.History {
+		handled := "N"
+		if h.Handled {
+			handled = "Y"
+		}
+		fmt.Printf(Format, h.Uuid, h.Timestamp, states[h.State], h.Counter, handled, h.Rule)
+	}
 }

@@ -3,6 +3,7 @@ package elasticsearch
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -213,7 +214,7 @@ func (e *Elasticsearch) Pit(Index string, KeepAlive string) (string, error) {
 	result, err := e.Connection.Post(endpoint, x)
 	err2 := json.Unmarshal(result, ResultJson)
 	if err2 != nil {
-		logger.Error().Str("id", "ERR10040001").Err(err).Msg("Unmarshal failed")
+		logger.Error().Str("id", "ERR10040001").Str("data", string(result[:])).Err(err).Msg("Unmarshal failed")
 		return "", err2
 	}
 	if err != nil {
@@ -268,17 +269,25 @@ func (e *Elasticsearch) StartPaginatedSearch(Index string, Query string) (*Elast
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug().Str("id", "DBG10060002").Str("old_pit", Search.Pagination.Pit.Id).Str("new_pit", result.PitId).Int("hits", len(result.Hits.Hits)).Msg("First paginated search")
-	Search.Pagination.SearchAfter = result.Hits.Hits[len(result.Hits.Hits)-1].Sort
+	logger.Debug().Str("id", "DBG10060002").Str("old_pit", Search.Pagination.Pit.Id).Str("new_pit", result.PitId).Int("hits", len(result.Hits.Hits)).Msg("Run of first paginated search complete")
+	if len(result.Hits.Hits) > 0 {
+		Search.Pagination.SearchAfter = result.Hits.Hits[len(result.Hits.Hits)-1].Sort
+	}
 	Search.Pagination.Pit.Id = result.PitId
 	return Search, nil
 }
 
 func (p *ElasticsearchPaginatedSearch) Next() error {
 	logger := log.With().Str("func", "ElasticsearchPaginatedSearch.Next").Str("package", "elasticsearch").Logger()
+
+	if len(p.Pagination.SearchAfter) == 0 {
+		err := errors.New("Tried to continue after end of search")
+		logger.Error().Str("id", "ERR10070001").Err(err).Msg("Failed to cross the border")
+		return err
+	}
 	j, err := json.Marshal(p.Pagination)
 	if err != nil {
-		logger.Error().Str("id", "ERR10070001").Err(err).Msg("Marshal pagination failed")
+		logger.Error().Str("id", "ERR10070002").Err(err).Msg("Marshal pagination failed")
 		return err
 	}
 	pagination := string(j[1 : len(j)-1])
@@ -289,8 +298,13 @@ func (p *ElasticsearchPaginatedSearch) Next() error {
 	if err != nil {
 		return err
 	}
-	logger.Debug().Str("id", "DBG10070003").Str("old_pit", p.Pagination.Pit.Id).Str("new_pit", result.PitId).Int("hits", len(result.Hits.Hits)).Msg("First paginated search")
-	p.Pagination.SearchAfter = result.Hits.Hits[len(result.Hits.Hits)-1].Sort
+	logger.Debug().Str("id", "DBG10070003").Str("old_pit", p.Pagination.Pit.Id).Str("new_pit", result.PitId).Int("hits", len(result.Hits.Hits)).Msg("Run of paginated search complete")
+	if len(result.Hits.Hits) > 0 {
+		p.Pagination.SearchAfter = result.Hits.Hits[len(result.Hits.Hits)-1].Sort
+	} else {
+		var x []interface{}
+		p.Pagination.SearchAfter = x
+	}
 	p.Pagination.Pit.Id = result.PitId
 	return nil
 }

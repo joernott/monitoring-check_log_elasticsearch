@@ -8,10 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/olorin/nagiosplugin"
-
-	"github.com/joernott/monitoring-check_log_elasticsearch/check"
-	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -32,46 +28,7 @@ var rootCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		var c *check.Check
-
-		nagios := nagiosplugin.NewCheck()
-		defer nagios.Finish()
-		nagios.AddResult(nagiosplugin.OK, "All systems are functioning within normal parameters")
-
-		parsedTimeout, err := parseTimeout(viper.GetString("timeout"))
-		if err != nil {
-			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not parse timeout")
-			return
-		}
-
-		elasticsearch, err := elasticsearch.NewElasticsearch(
-			viper.GetBool("ssl"),
-			viper.GetString("host"),
-			viper.GetInt("port"),
-			viper.GetString("user"),
-			viper.GetString("password"),
-			viper.GetBool("validatessl"),
-			viper.GetString("proxy"),
-			viper.GetBool("socks"),
-			parsedTimeout,
-		)
-		if err != nil {
-			log.Fatal().Err(err).Msg("UNKNOWN: Could not create connection to Elasticsearch")
-			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not create connection to Elasticsearch")
-			return
-		}
-		c, err = check.NewCheck(viper.GetString("actionfile"), viper.GetString("statusfile"), elasticsearch, nagios)
-		if err != nil {
-			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
-			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not create check")
-			return
-		}
-		err = c.Execute(viper.GetStringSlice("action"))
-		if err != nil {
-			log.Fatal().Msg("UNKNOWN: Could not execute check")
-			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not execute check")
-			return
-		}
+		cmd.Help()
 		return
 	},
 }
@@ -89,7 +46,6 @@ var Proxy string
 var ProxyIsSocks bool
 var ActionFile string
 var Action []string
-var StatusFile string
 var Timeout string
 var Uuid []string
 
@@ -102,55 +58,63 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&ConfigFile, "config", "c", "", "Configuration file")
-	rootCmd.PersistentFlags().BoolVarP(&UseSSL, "ssl", "s", true, "Use SSL")
-	rootCmd.PersistentFlags().BoolVarP(&ValidateSSL, "validatessl", "v", true, "Validate SSL certificate")
-	rootCmd.PersistentFlags().StringVarP(&Host, "host", "H", "localhost", "Hostname of the server")
-	rootCmd.PersistentFlags().IntVarP(&Port, "port", "P", 9200, "Network port")
-	rootCmd.PersistentFlags().StringVarP(&User, "user", "u", "", "Username for Elasticsearch")
-	rootCmd.PersistentFlags().StringVarP(&Password, "password", "p", "", "Password for the Elasticsearch user")
 	rootCmd.PersistentFlags().StringVarP(&LogLevel, "loglevel", "l", "WARN", "Log level")
 	rootCmd.PersistentFlags().StringVarP(&LogFile, "logfile", "L", "/var/log/icinga2/check_log_elasticsearch.log", "Log file (use - to log to stdout)")
-	rootCmd.PersistentFlags().StringVarP(&Proxy, "proxy", "y", "", "Proxy (defaults to none)")
-	rootCmd.PersistentFlags().BoolVarP(&ProxyIsSocks, "socks", "Y", false, "This is a SOCKS proxy")
 	rootCmd.PersistentFlags().StringVarP(&ActionFile, "actionfile", "f", "/etc/icinga2/check_log_elasticsearch/actions.yaml", "Action file")
 	rootCmd.PersistentFlags().StringSliceVarP(&Action, "action", "a", []string{}, "Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)")
-	rootCmd.PersistentFlags().StringVarP(&StatusFile, "statusfile", "t", "/var/cache/icinga2/check_log_elasticsearch/status", "File to remember the last status for an action, the name of the action will be appendend")
-	rootCmd.PersistentFlags().StringVarP(&Timeout, "timeout", "T", "2m", "Timeout understood by time.ParseDuration")
-	clearCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Clear entry with the given uuid from history")
 
-	rootCmd.AddCommand(clearCmd)
+	checkCmd.PersistentFlags().BoolVarP(&UseSSL, "ssl", "s", true, "Use SSL")
+	checkCmd.PersistentFlags().BoolVarP(&ValidateSSL, "validatessl", "v", true, "Validate SSL certificate")
+	checkCmd.PersistentFlags().StringVarP(&Host, "host", "H", "localhost", "Hostname of the server")
+	checkCmd.PersistentFlags().IntVarP(&Port, "port", "P", 9200, "Network port")
+	checkCmd.PersistentFlags().StringVarP(&User, "user", "u", "", "Username for Elasticsearch")
+	checkCmd.PersistentFlags().StringVarP(&Password, "password", "p", "", "Password for the Elasticsearch user (consider using the env variable CLE_PASSWORD instead of passing it via commandline)")
+	checkCmd.PersistentFlags().StringVarP(&Proxy, "proxy", "y", "", "Proxy (defaults to none)")
+	checkCmd.PersistentFlags().BoolVarP(&ProxyIsSocks, "socks", "Y", false, "This is a SOCKS proxy")
+	checkCmd.PersistentFlags().StringVarP(&Timeout, "timeout", "T", "2m", "Timeout understood by time.ParseDuration")
 
-	viper.SetDefault("ssl", false)
+	handleCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Clear entry with the given uuid from history")
+	rmCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Clear entry with the given uuid from history")
+
+	rootCmd.AddCommand(checkCmd)
+	rootCmd.AddCommand(handleCmd)
+	rootCmd.AddCommand(rmCmd)
+	rootCmd.AddCommand(listCmd)
+
+	viper.SetDefault("loglevel", "WARN")
+	viper.SetDefault("logfile", "/var/log/icinga2/check_log_elasticsearch.log")
+	viper.SetDefault("actionfile", "/etc/icinga2/check_log_elasticsearch/actions.yaml")
+	viper.SetDefault("action", "")
+
+	viper.SetDefault("ssl", true)
 	viper.SetDefault("validatessl", true)
 	viper.SetDefault("host", "localhost")
 	viper.SetDefault("port", 9200)
 	viper.SetDefault("user", "")
 	viper.SetDefault("password", "")
-	viper.SetDefault("loglevel", "WARN")
-	viper.SetDefault("logfile", "/var/log/icinga2/check_log_elasticsearch.log")
 	viper.SetDefault("proxy", "")
 	viper.SetDefault("socks", false)
-	viper.SetDefault("actionfile", "/etc/icinga2/check_log_elasticsearch/actions.yaml")
-	viper.SetDefault("action", "")
-	viper.SetDefault("statusfile", "/var/cache/icinga2/check_log_elasticsearch/status.txt")
 	viper.SetDefault("timeout", "2m")
+
 	viper.SetDefault("uuid", []string{})
 
-	viper.BindPFlag("ssl", rootCmd.PersistentFlags().Lookup("ssl"))
-	viper.BindPFlag("validatessl", rootCmd.PersistentFlags().Lookup("validatessl"))
-	viper.BindPFlag("host", rootCmd.PersistentFlags().Lookup("host"))
-	viper.BindPFlag("port", rootCmd.PersistentFlags().Lookup("port"))
-	viper.BindPFlag("user", rootCmd.PersistentFlags().Lookup("user"))
-	viper.BindPFlag("password", rootCmd.PersistentFlags().Lookup("password"))
 	viper.BindPFlag("loglevel", rootCmd.PersistentFlags().Lookup("loglevel"))
 	viper.BindPFlag("logfile", rootCmd.PersistentFlags().Lookup("logfile"))
-	viper.BindPFlag("proxy", rootCmd.PersistentFlags().Lookup("proxy"))
-	viper.BindPFlag("socks", rootCmd.PersistentFlags().Lookup("socks"))
 	viper.BindPFlag("actionfile", rootCmd.PersistentFlags().Lookup("actionfile"))
 	viper.BindPFlag("action", rootCmd.PersistentFlags().Lookup("action"))
-	viper.BindPFlag("statusfile", rootCmd.PersistentFlags().Lookup("statusfile"))
-	viper.BindPFlag("timeout", rootCmd.PersistentFlags().Lookup("timeout"))
-	viper.BindPFlag("uuid", clearCmd.PersistentFlags().Lookup("uuid"))
+
+	viper.BindPFlag("ssl", checkCmd.PersistentFlags().Lookup("ssl"))
+	viper.BindPFlag("validatessl", checkCmd.PersistentFlags().Lookup("validatessl"))
+	viper.BindPFlag("host", checkCmd.PersistentFlags().Lookup("host"))
+	viper.BindPFlag("port", checkCmd.PersistentFlags().Lookup("port"))
+	viper.BindPFlag("user", checkCmd.PersistentFlags().Lookup("user"))
+	viper.BindPFlag("password", checkCmd.PersistentFlags().Lookup("password"))
+	viper.BindPFlag("proxy", checkCmd.PersistentFlags().Lookup("proxy"))
+	viper.BindPFlag("socks", checkCmd.PersistentFlags().Lookup("socks"))
+	viper.BindPFlag("timeout", checkCmd.PersistentFlags().Lookup("timeout"))
+
+	viper.BindPFlag("uuid", handleCmd.PersistentFlags().Lookup("uuid"))
+	viper.BindPFlag("uuid", rmCmd.PersistentFlags().Lookup("uuid"))
 
 	viper.SetEnvPrefix("cle")
 	viper.BindEnv("password")
