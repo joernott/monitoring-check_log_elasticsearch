@@ -3,13 +3,12 @@ package check
 import (
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
-	"github.com/olorin/nagiosplugin"
+	"github.com/riton/nagiosplugin/v2"
 	"github.com/rs/zerolog/log"
 )
 
@@ -113,10 +112,13 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) error {
 		if metric_name == "" {
 			metric_name = rulename
 		}
-		nagios.AddPerfDatum(metric_name, "c", float64(a.results[rulename]), math.Inf(1), math.Inf(1), rule.warnRange.End, rule.critRange.End)
+		v, _:=  nagiosplugin.NewFloatPerfDatumValue(float64(a.results[rulename]))
+		nagios.AddPerfDatum(metric_name, "c",v, rule.warnRange, rule.critRange, nil, nil)
 	}
-	nagios.AddPerfDatum(a.Name+"_lines", "c", float64(a.results["_total"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
-	nagios.AddPerfDatum(a.Name+"_not_matched", "c", float64(a.results["_nomatch"]), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
+	t, _:=  nagiosplugin.NewFloatPerfDatumValue(float64(a.results["_total"]))
+	nagios.AddPerfDatum(a.Name+"_lines", "c", t, nil, nil, nil, nil)
+	n, _:=  nagiosplugin.NewFloatPerfDatumValue(float64(a.results["_nomatch"]))
+	nagios.AddPerfDatum(a.Name+"_not_matched", "c", n, nil, nil, nil, nil)
 	a.HistoricResults(nagios)
 	return nil
 }
@@ -126,6 +128,9 @@ func (a Action) HistoricResults(nagios *nagiosplugin.Check) {
 	var hc int
 	logger := log.With().Str("func", "HistoricResults").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
+	if a.StatusData == nil {
+		return
+	}
 	for _, h := range a.StatusData.History {
 		if !h.Handled {
 			switch h.State {
@@ -142,7 +147,8 @@ func (a Action) HistoricResults(nagios *nagiosplugin.Check) {
 			hc++
 		}
 	}
-	nagios.AddPerfDatum(a.Name+"_historic", "c", float64(hc), math.Inf(1), math.Inf(1), math.Inf(1), math.Inf(1))
+	hp,_:=nagiosplugin.NewFloatPerfDatumValue(float64(hc))
+	nagios.AddPerfDatum(a.Name+"_historic", "c", hp, nil, nil, nil, nil)
 }
 
 func (a Action) newRulecount() RuleCount {

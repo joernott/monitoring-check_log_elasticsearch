@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/olorin/nagiosplugin"
+	"github.com/riton/nagiosplugin/v2"
 
 	"github.com/joernott/monitoring-check_log_elasticsearch/check"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"

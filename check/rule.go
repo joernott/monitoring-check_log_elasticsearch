@@ -5,7 +5,7 @@ import (
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
-	"github.com/olorin/nagiosplugin"
+	"github.com/riton/nagiosplugin/v2"
 	"github.com/rs/zerolog/log"
 )
 

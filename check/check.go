@@ -8,7 +8,7 @@ import (
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
-	"github.com/olorin/nagiosplugin"
+	"github.com/riton/nagiosplugin/v2"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
@@ -181,7 +181,7 @@ func (c *Check) Execute(Actions []string) error {
 			logger.Info().Str("id", "INF20020001").Int("page", page).Int("hits", hc).Str("timestamp", timestamp).Msg("Next page")
 		}
 	}
-	c.outputAll()
+	c.outputAll(Actions)
 	return nil
 }
 
@@ -197,8 +197,18 @@ func actionInList(action string, list []string) bool {
 	return false
 }
 
-func (c Check) outputAll() error {
+func (c Check) outputAll(Actions []string) error {
+	logger := log.With().Str("func", "Check.outputAll").Str("package", "check").Logger()
+	logger.Trace().Msg("Enter func")
 	for _, a := range c.actions.Actions {
+		if !actionInList(a.Name, Actions) {
+			logger.Debug().Str("id", "DBG20120001").
+				Str("name", a.Name).
+				Str("index", a.Index).
+				Str("query", a.Query).
+				Msg("Search not in requested actions, skipping")
+			continue
+		}
 		if a.History > 0 {
 			a.StatusData.Prune(a.History)
 		}

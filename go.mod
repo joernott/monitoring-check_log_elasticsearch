@@ -7,6 +7,7 @@ require (
 	github.com/google/uuid v1.1.2
 	github.com/olorin/nagiosplugin v1.2.0
 	github.com/pelletier/go-toml/v2 v2.0.2 // indirect
+	github.com/riton/nagiosplugin/v2 v2.0.0 // indirect
 	github.com/rs/zerolog v1.27.0
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
