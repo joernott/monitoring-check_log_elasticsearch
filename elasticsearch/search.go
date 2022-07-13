@@ -88,7 +88,7 @@ func (e *Elasticsearch) Search(Index string, Query string) (*ElasticsearchResult
 	return ResultJson, nil
 }
 
-func (haystack HitElement) Get(Needle string) (string, bool) {
+func (haystack HitElement) Get(Needle string) (interface{}, bool) {
 	if len(haystack) == 0 {
 		return "", false
 	}
@@ -106,5 +106,10 @@ func (haystack HitElement) Get(Needle string) (string, bool) {
 	if !ok {
 		return "", ok
 	}
-	return fmt.Sprintf("%v", value), true
+	return value, true
+}
+
+func (haystack HitElement) GetString(Needle string) (string, bool) {
+	s, ok := haystack.Get(Needle)
+	return fmt.Sprintf("%v", s), ok
 }

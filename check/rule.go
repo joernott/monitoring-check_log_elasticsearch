@@ -5,28 +5,28 @@ import (
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
-	"github.com/riton/nagiosplugin/v2"
+	"github.com/joernott/nagiosplugin/v2"
 	"github.com/rs/zerolog/log"
 )
 
 type Rule struct {
-	Description string    `json:"description" yaml:"description"`
-	MetricName  string    `json:"metric_name" yaml:"metric_name"`
-	Pattern     []Pattern `json:"pattern" yaml:"pattern"`
-	Exclude     []Pattern `json:"exclude" yaml:"exclude"`
-	UseAnd      bool      `json:"use_and" yaml:"use_and"`
-	Warning     string    `json:"warning" yaml:"warning"`
-	Critical    string    `json:"critical" yaml:"critical"`
-	warnRange   *nagiosplugin.Range
-	critRange   *nagiosplugin.Range
+	Description  string    `json:"description" yaml:"description"`
+	MetricName   string    `json:"metric_name" yaml:"metric_name"`
+	Pattern      []Pattern `json:"pattern" yaml:"pattern"`
+	Exclude      []Pattern `json:"exclude" yaml:"exclude"`
+	UseAnd       bool      `json:"use_and" yaml:"use_and"`
+	Warning      string    `json:"warning" yaml:"warning"`
+	Critical     string    `json:"critical" yaml:"critical"`
+	OutputFields []string  `json:"output_fields" yaml:"output_fields"`
+	OutputLines  int       `json:"output_lines" yaml:"output_lines"`
+	warnRange    *nagiosplugin.Range
+	critRange    *nagiosplugin.Range
 }
 
 type Pattern struct {
 	Field string `json:"field" yaml:"field"`
 	Regex string `json:"regex" yaml:"regex"`
 }
-
-type RuleCount map[string]uint64
 
 func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 	logger := log.With().Str("func", "isMatch").Str("package", "check").Logger()
@@ -35,7 +35,7 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 	except := false
 	first := true
 	for _, p := range r.Pattern {
-		s, ok := Source.Get(p.Field)
+		s, ok := Source.GetString(p.Field)
 		if !ok {
 			break
 		}
@@ -70,7 +70,7 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 	}
 	first = true
 	for _, e := range r.Exclude {
-		s, ok := Source.Get(e.Field)
+		s, ok := Source.GetString(e.Field)
 		if !ok {
 			break
 		}
@@ -96,3 +96,4 @@ func (r Rule) isMatch(Source elasticsearch.HitElement) (bool, error) {
 	}
 	return found, nil
 }
+

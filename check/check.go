@@ -8,7 +8,7 @@ import (
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
-	"github.com/riton/nagiosplugin/v2"
+	"github.com/joernott/nagiosplugin/v2"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
@@ -68,7 +68,6 @@ func NewCheck(ActionsFile string, Connection *elasticsearch.Elasticsearch, Nagio
 		actions.Actions[i].results = actions.Actions[i].newRulecount()
 	}
 	c.actions = actions
-
 	return c, nil
 }
 
@@ -152,7 +151,7 @@ func (c *Check) Execute(Actions []string) error {
 		}
 		logger.Info().Str("id", "INF20020001").Int("page", 0).Int("hits", hc).Str("timestamp", timestamp).Msg("First page")
 		defer pagination.Close()
-		for page := 0; page < int(a.Limit); page++ {
+		for page := 0; page < int(a.Limit-1); page++ {
 			err = pagination.Next()
 			if err != nil {
 				logger.Error().Str("id", "ERR20020002").

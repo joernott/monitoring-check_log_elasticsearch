@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/riton/nagiosplugin/v2"
+	"github.com/joernott/nagiosplugin/v2"
 
 	"github.com/joernott/monitoring-check_log_elasticsearch/check"
 	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
@@ -28,8 +28,8 @@ var checkCmd = &cobra.Command{
 		var c *check.Check
 
 		nagios := nagiosplugin.NewCheck()
+		nagios.SetVerbosity(nagiosplugin.VERBOSITY_MULTI_LINE)
 		defer nagios.Finish()
-		nagios.AddResult(nagiosplugin.OK, "All systems are functioning within normal parameters")
 
 		parsedTimeout, err := parseTimeout(viper.GetString("timeout"))
 		if err != nil {

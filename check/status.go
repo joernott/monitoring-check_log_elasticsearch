@@ -26,6 +26,7 @@ type StatusHistory struct {
 	Rule      string `json:"rule" yaml:"rule"`
 	Handled   bool   `json:"handled" yaml:"handled"`
 	Counter   uint64 `json:"counter" yaml:"counter"`
+	current   bool
 }
 
 func (data *StatusData) Save(Filename string) error {
@@ -97,6 +98,7 @@ func (status *StatusData) AddHistoryEntry(Timestamp string, State int, Rule stri
 		Handled:   false,
 		Rule:      Rule,
 		Counter:   Counter,
+		current:   true,
 	}
 	status.History = append(status.History, h)
 }
