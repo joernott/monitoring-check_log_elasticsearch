@@ -4,16 +4,18 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/joernott/monitoring-check_log_elasticsearch/check"
+	"github.com/joernott/monitoring-check_log_elasticsearch/check_log_elasticsearch/check"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var rmCmd = &cobra.Command{
-	Use:   "rm",
-	Short: "Remove a history entry",
-	Long:  `Removes a history entry with the provided uuid from a status`,
+// The subcommand "handle" is called manually to set historic entries to
+// "handled"
+var handleCmd = &cobra.Command{
+	Use:   "handle",
+	Short: "Handle a history entry",
+	Long:  `Mark a history entry with the provided uuid as handled`,
 	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
 		setupLogging()
 		err := HandleConfigFile()
@@ -30,7 +32,7 @@ var rmCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
 			os.Exit(2)
 		}
-		err = c.RmHistory(viper.GetStringSlice("action"), viper.GetStringSlice("uuid"))
+		err = c.HandleHistory(viper.GetStringSlice("action"), viper.GetStringSlice("uuid"))
 		if err != nil {
 			os.Exit(2)
 		}

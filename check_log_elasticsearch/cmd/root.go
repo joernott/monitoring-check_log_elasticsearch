@@ -15,6 +15,8 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// Calling check_log_elasticsearch without a subcommand will just output the
+// generic help.
 var rootCmd = &cobra.Command{
 	Use:   "check_log_elasticsearch",
 	Short: "Check logs stored in elasticsearch",
@@ -33,22 +35,55 @@ var rootCmd = &cobra.Command{
 	},
 }
 
+// Global variable for cobra, storing the viper configuration file name
 var ConfigFile string
-var UseSSL bool
-var ValidateSSL bool
-var Host string
-var Port int
-var User string
-var Password string
+
+// Global variable for cobra, one of the zerolog log levels (TRACE, DEBUG, INFO,
+// WARN, ERROR, FATAL,PANIC). Trace produces an extreme amount of log data, use
+// with care on a small dataset
 var LogLevel string
+
+// Global variable for cobra, name of the log file, "-" logs to stdout
 var LogFile string
-var Proxy string
-var ProxyIsSocks bool
+
+// Global variable for cobra, name of the config file describing the actions
 var ActionFile string
+
+// Global variable for cobra, list of actions to execute. If empty, all actions
+// will be executed
 var Action []string
+
+// Global variable for cobra, used in the check subcommand
+var UseSSL bool
+
+// Global variable for cobra, validate the SSL certificate (check subcommand)
+var ValidateSSL bool
+
+// Global variable for cobra, hostname or IP (check subcommand)
+var Host string
+
+// Global variable for cobra, port of Elasticsearch (check subcommand)
+var Port int
+
+// Global variable for cobra, User for connecting to  Elasticsearch (check subcommand)
+var User string
+
+// Global variable for cobra, Password for connecting to Elasticsearch (check subcommand)
+var Password string
+
+//Global variable for cobra, URL of a proxy (check subcommand)
+var Proxy string
+
+// Global variable for cobra, is the proxy a Socks proxy (check subcommand)
+var ProxyIsSocks bool
+
+// Global variable for cobra, timeout for the checks
 var Timeout string
+
+// Global variable for cobra, list of uuids for handle and rm subcommands
 var Uuid []string
 
+// Run the checkcommand
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -56,6 +91,7 @@ func Execute() {
 	}
 }
 
+// Initialize the various parameters and set defaults
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&ConfigFile, "config", "c", "", "Configuration file")
 	rootCmd.PersistentFlags().StringVarP(&LogLevel, "loglevel", "l", "WARN", "Log level")
@@ -120,6 +156,7 @@ func init() {
 	viper.BindEnv("password")
 }
 
+// Load the configuration file if the parameter is set.
 func HandleConfigFile() error {
 	logger := log.With().Str("func", "rootCmd.HandleConfigFile").Str("package", "cmd").Logger()
 	if ConfigFile != "" {
@@ -134,7 +171,7 @@ func HandleConfigFile() error {
 	return nil
 }
 
-// Configure the logging. Has to be called in the actuall command function
+// Configure the logging.
 func setupLogging() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	var output io.Writer
@@ -174,6 +211,7 @@ func setupLogging() {
 	log.Debug().Str("id", "DBG00001").Str("func", "setupLogging").Str("logfile", LogFile).Msg("Logging to " + LogFile)
 }
 
+// Parse the timeout string into a go duration
 func parseTimeout(timeout string) (time.Duration, error) {
 	logger := log.With().Str("func", "rootCmd.parseTimeout").Str("package", "cmd").Logger()
 	t, err := time.ParseDuration(timeout)

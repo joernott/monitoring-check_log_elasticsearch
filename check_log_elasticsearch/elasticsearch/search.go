@@ -1,14 +1,13 @@
 package elasticsearch
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	//"github.com/davecgh/go-spew/spew"
 	"github.com/rs/zerolog/log"
 )
 
+// The result of a Search
 type ElasticsearchResult struct {
 	PitId        string                       `json:"pit_id"`
 	Took         int                          `json:"took"`
@@ -20,6 +19,7 @@ type ElasticsearchResult struct {
 	Aggregations map[string]AggregationResult `json:"aggregations"`
 }
 
+// Results per shard
 type ElasticsearchShardResult struct {
 	Total      int `json:"total"`
 	Successful int `json:"successful"`
@@ -27,12 +27,15 @@ type ElasticsearchShardResult struct {
 	Failed     int `json:"failed"`
 }
 
+// The matching documents in the search result, this contains the actual hits
+// as well as some statistics
 type ElasticsearchHitResult struct {
 	Total    ElasticsearchHitTotal  `json:"total"`
 	MaxScore float64                `json:"max_score"`
 	Hits     []ElasticsearchHitList `json:"hits"`
 }
 
+// Search result data from a matching document
 type ElasticsearchHitList struct {
 	Index  string        `json:"_index"`
 	Type   string        `json:"_type"`
@@ -43,15 +46,20 @@ type ElasticsearchHitList struct {
 	Sort   []interface{} `json:"sort"`
 }
 
+// Statistical data for the HitResult
 type ElasticsearchHitTotal struct {
 	Value    int64  `json:"total"`
 	Relation string `json:"relation"`
 }
 
+// Data from an aggregation
 type AggregationResult map[string]interface{}
 
+// Hit elements match the documents data structure
 type HitElement map[string]interface{}
 
+// Conduct a search on the given Index using the provided Query. See
+// https://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html
 func (e *Elasticsearch) Search(Index string, Query string) (*ElasticsearchResult, error) {
 	var ResultJson *ElasticsearchResult
 
@@ -63,23 +71,7 @@ func (e *Elasticsearch) Search(Index string, Query string) (*ElasticsearchResult
 	}
 
 	logger.Debug().Str("id", "DBG10020001").Str("query", Query).Str("endpoint", endpoint).Msg("Execute Query")
-	result, err := e.Connection.Post(endpoint, []byte(Query))
-	if result != nil {
-		err2 := json.Unmarshal(result, ResultJson)
-		if err2 != nil {
-			logger.Error().Str("id", "ERR10020001").Err(err).Msg("Unmarshal failed")
-			return nil, err2
-		}
-		// In case of an emergency, you can enable this. It will essentially dump the data into our log
-		/*
-			debugOut, err2 := json.MarshalIndent(ResultJson.Hits, "", "  ")
-			if err2 != nil {
-				logger.Warn().Str("id", "WRN10020001").Err(err2).Msg("Marshal Ident failed")
-			} else {
-				log.Debug().Str("id", "DBG10020002").Str("json", string(debugOut)).Msg("Query result")
-			}
-		*/
-	}
+	err:=e.Connection.PostJSON(endpoint, []byte(Query), ResultJson)
 	if err != nil {
 		logger.Error().Str("id", "ERR10020002").Err(err).Msg("Query failed")
 		return ResultJson, err
@@ -88,6 +80,10 @@ func (e *Elasticsearch) Search(Index string, Query string) (*ElasticsearchResult
 	return ResultJson, nil
 }
 
+// Retrieve an element from a HitResult, which may be a nested structure.
+// Needle is the name of the element to retrieve. For nested fields, the dot
+// notation can be used, e.g. "log.level" fetches the contents of "level" from
+// the "log" element.
 func (haystack HitElement) Get(Needle string) (interface{}, bool) {
 	if len(haystack) == 0 {
 		return "", false
@@ -109,6 +105,10 @@ func (haystack HitElement) Get(Needle string) (interface{}, bool) {
 	return value, true
 }
 
+// Retrieve a String from a HitResult, which may be a nested structure.
+// Needle is the name of the element to retrieve. For nested fields, the dot
+// notation can be used, e.g. "log.level" fetches the contents of "level" from
+// the "log" element.
 func (haystack HitElement) GetString(Needle string) (string, bool) {
 	s, ok := haystack.Get(Needle)
 	return fmt.Sprintf("%v", s), ok

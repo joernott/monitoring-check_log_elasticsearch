@@ -7,17 +7,23 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// This counts the hits per rule which are considers a match
+type RuleCount map[string]RuleCountEntry
+
+// Every Renty consists of a number of Hits and a slice of Contents from all the
+// hits, which are output to Nagios/Icinga2
 type RuleCountEntry struct {
 	Count uint64
 	Lines []string
 }
 
-type RuleCount map[string]RuleCountEntry
-
+// Extract just the number from the RuleCount map.
 func (r RuleCount) Count(Name string) uint64 {
 	return r[Name].Count
 }
 
+// Add a hit to the RuleCount entry with the given name. This increases the
+// count and adds a maximum number of lines to the entry
 func (r RuleCount) Add(Name string, Lines []string, MaxLines int) RuleCountEntry {
 	logger := log.With().Str("func", "rulecount.Add").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
@@ -34,6 +40,7 @@ func (r RuleCount) Add(Name string, Lines []string, MaxLines int) RuleCountEntry
 	return rule
 }
 
+// Outputs the RuleCountEntry to Nagios/Icinga2 as indented lines
 func (r RuleCountEntry) OutputRuleCountLines(nagios *nagiosplugin.Check, MaxLines int) {
 	logger := log.With().Str("func", "RuleCountEntry.OutputRuleCountLines").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")

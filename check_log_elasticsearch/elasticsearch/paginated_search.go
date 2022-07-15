@@ -1,4 +1,3 @@
-// package elasticsearch handles the interaction with elasticsearch
 package elasticsearch
 
 import (
@@ -6,95 +5,35 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
-	//"github.com/davecgh/go-spew/spew"
-	"github.com/joernott/monitoring-check_log_elasticsearch/lra"
 	"github.com/rs/zerolog/log"
 )
 
-type Elasticsearch struct {
-	Connection *lra.Connection
-}
-
-type ElasticsearchErrorResponse struct {
-	Error ElasticsearchError `json:"error"`
-}
-type ElasticsearchError struct {
-	RootCause []ElasticsearchErrorRootCause `json:"root_cause"`
-	Reason    string                        `json:"reason"`
-	Resource  ElasticsearchErrorResource    `json:"resource"`
-	IndexUUID string                        `json:"index_uuid"`
-	Index     string                        `json:"index"`
-}
-
-type ElasticsearchErrorRootCause struct {
-	Type      string                     `json:"type"`
-	Reason    string                     `json:"reason"`
-	Resource  ElasticsearchErrorResource `json:"resource"`
-	IndexUUID string                     `json:"index_uuid"`
-	Index     string                     `json:"index"`
-}
-
-type ElasticsearchErrorResource struct {
-	Type string `json:"type"`
-	Id   string `json:"id"`
-}
-
+// Pagination data needed for a paginated search.
+// See https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html for more information.
 type ElasticsearchQueryPagination struct {
-	Pit         ElasticsearchPit         `json:"pit"`
-	SearchAfter ElasticsearchSearchAfter `json:"search_after"`
-	Size        uint                     `json:"size"`
+	Pit         ElasticsearchPit         `json:"pit"`			// Elasticsearch Point In Time
+	SearchAfter ElasticsearchSearchAfter `json:"search_after"`	// Information from the last search to be fed to the next as starting point
+	Size        uint                     `json:"size"`          // The maximum size of a page
 }
 
+// A paginated search repeats the same query on the same index, every time
+// continuing, where the last query ended. This keeps track of the data needed
+// for a paginated search.
 type ElasticsearchPaginatedSearch struct {
-	e           *Elasticsearch
-	Index       string
-	Query       string
-	Pagination  ElasticsearchQueryPagination
-	SearchAfter ElasticsearchSearchAfter
-	Results     []*ElasticsearchResult
+	e           *Elasticsearch					// Link back to the elasticsearch connection
+	Index       string							// Name of the index
+	Query       string							// The actual query
+	Pagination  ElasticsearchQueryPagination	// Pagination data from the previous run
+	Results     []*ElasticsearchResult			// Results from every search
 }
 
+// The information returned for search after is a dynamic mix of data types
 type ElasticsearchSearchAfter []interface{}
 
-func NewElasticsearch(SSL bool, Host string, Port int, User string, Password string, ValidateSSL bool, Proxy string, Socks bool, timeout time.Duration) (*Elasticsearch, error) {
-	var e *Elasticsearch
-
-	logger := log.With().Str("func", "NewElasticsearch").Str("package", "elasticsearch").Logger()
-	e = new(Elasticsearch)
-
-	hdr := make(lra.HeaderList)
-	hdr["Content-Type"] = "application/json"
-
-	logger.Debug().
-		Str("id", "DBG10010001").
-		Str("host", Host).
-		Int("port", Port).
-		Str("user", User).
-		Str("password", "*").
-		Bool("validate_ssl", ValidateSSL).
-		Str("proxy", Proxy).Bool("socks", Socks).
-		Msg("Create connection")
-	c, err := lra.NewConnection(SSL,
-		Host,
-		Port,
-		"",
-		User,
-		Password,
-		ValidateSSL,
-		Proxy,
-		Socks,
-		hdr,
-		timeout)
-	if err != nil {
-		logger.Error().Str("id", "ERR10010001").Err(err).Msg("Failed to create connection")
-		return nil, err
-	}
-	e.Connection = c
-	return e, nil
-}
-
+// Starts a paginated search. This is pretty much the same as a regular search
+// but the query string must contain a _PAGINATION_ placeholder, where a
+// different pagination information blurb will be inserted for every page.
 func (e *Elasticsearch) StartPaginatedSearch(Index string, Query string) (*ElasticsearchPaginatedSearch, error) {
 	logger := log.With().Str("func", "Search").Str("package", "elasticsearch").Logger()
 
@@ -125,6 +64,7 @@ func (e *Elasticsearch) StartPaginatedSearch(Index string, Query string) (*Elast
 	return Search, nil
 }
 
+// Fetches the next page of a pagination
 func (p *ElasticsearchPaginatedSearch) Next() error {
 	logger := log.With().Str("func", "ElasticsearchPaginatedSearch.Next").Str("package", "elasticsearch").Logger()
 
@@ -157,6 +97,7 @@ func (p *ElasticsearchPaginatedSearch) Next() error {
 	return nil
 }
 
+// Close the paginated search by feeing the PIT in Elasticsearch
 func (p *ElasticsearchPaginatedSearch) Close() error {
 	return p.e.DeletePit(p.Pagination.Pit.Id)
 }

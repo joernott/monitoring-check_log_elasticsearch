@@ -5,13 +5,14 @@ import (
 
 	"github.com/joernott/nagiosplugin/v2"
 
-	"github.com/joernott/monitoring-check_log_elasticsearch/check"
-	"github.com/joernott/monitoring-check_log_elasticsearch/elasticsearch"
+	"github.com/joernott/monitoring-check_log_elasticsearch/check_log_elasticsearch/check"
+	"github.com/joernott/monitoring-check_log_elasticsearch/check_log_elasticsearch/elasticsearch"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
+// The subcommand "check" to execute a check. This is called by Nagios/Icinga2
 var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check logs",

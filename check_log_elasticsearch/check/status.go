@@ -7,18 +7,26 @@ import (
 	"os"
 	"time"
 
-	//"github.com/davecgh/go-spew/spew"
-
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
 
+// The information stored in the status file. It consists of a Timestamp in the
+// format expected by Elasticsearch in the timestamp field e.g. 
+// 1900-01-01T00:00:00.000Z and a Slice of historic events.
 type StatusData struct {
 	Timestamp string          `json:"timestamp" yaml:"timestamp"`
 	History   []StatusHistory `json:"history" yaml:"history"`
 }
 
+// A StatusHistory entry has a Uuid, a Timestamp, when it happened, the
+// resulting State for Nagios/Icinga2 and the name of the Rule.
+// The bool field Handled can be set to true, if the Event has been handled
+// and should not be used for alerting again. The Counter is the numebr of
+// Hits for that rule.
+// current will be used to skip over the "historic" events added during the
+// current run.
 type StatusHistory struct {
 	Uuid      string `json:"uuid" yaml:"uuid"`
 	Timestamp string `json:"timestamp" yaml:"timestamp"`
@@ -29,6 +37,7 @@ type StatusHistory struct {
 	current   bool
 }
 
+// Saves the StatusData structure to the given file
 func (data *StatusData) Save(Filename string) error {
 	logger := log.With().Str("func", "StatusData.Save").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
@@ -59,6 +68,9 @@ func (data *StatusData) Save(Filename string) error {
 	return nil
 }
 
+// Loads the StatusData from the given file. If the file does not exist, an
+// empty structure with a timestamp of "1900-01-01T00:00:00.000Z" is returned.
+// If the file can't be read, an error is returned.
 func ReadStatus(Filename string) (*StatusData, error) {
 	var data *StatusData
 
@@ -90,6 +102,7 @@ func ReadStatus(Filename string) (*StatusData, error) {
 	return data, nil
 }
 
+// Add a history entry to the StatusData Object
 func (status *StatusData) AddHistoryEntry(Timestamp string, State int, Rule string, Counter uint64) {
 	h := StatusHistory{
 		Uuid:      uuid.New().String(),
@@ -103,6 +116,7 @@ func (status *StatusData) AddHistoryEntry(Timestamp string, State int, Rule stri
 	status.History = append(status.History, h)
 }
 
+// Sets the Handled field to true for the historic entry with the given Uuid.
 func (status *StatusData) Acknowledge(Uuid string) {
 	for _, h := range status.History {
 		if Uuid == h.Uuid {
@@ -111,6 +125,8 @@ func (status *StatusData) Acknowledge(Uuid string) {
 	}
 }
 
+// Iterates over all historic events and removes them, if they are older than
+// the provided retention time in seconds
 func (status *StatusData) Prune(Retention uint64) {
 	logger := log.With().Str("func", "status.Prune").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
@@ -130,6 +146,8 @@ func (status *StatusData) Prune(Retention uint64) {
 	status.History = new
 }
 
+// Removes one or more Entries contained in the list of Uuids from the history 
+// of the StatusData.
 func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 	var new []StatusHistory
 
@@ -154,6 +172,8 @@ func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 	status.History = new
 }
 
+// Sets one or more Entries contained in the list of Uuids from the history 
+// of the StatusData to "handled".
 func (status *StatusData) HandleHistoryEntry(Uuids []string) {
 	var new []StatusHistory
 
@@ -179,6 +199,7 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string) {
 	status.History = new
 }
 
+// Print a formatted list of history entries to stdout.
 func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionFormat string) {
 	logger := log.With().Str("func", "status.PrintHistory").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
