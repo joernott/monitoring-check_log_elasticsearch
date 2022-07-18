@@ -38,6 +38,7 @@ func NewCheck(ActionsFile string, Connection *elasticsearch.Elasticsearch, Nagio
 
 	actions, err := readActionFile(ActionsFile)
 	if err != nil {
+		c.nagios.AddResult(nagiosplugin.UNKNOWN, "Error parsing action file "+ActionsFile+": "+err.Error())
 		return nil, err
 	}
 	for i := 0; i < len(actions.Actions); i++ {

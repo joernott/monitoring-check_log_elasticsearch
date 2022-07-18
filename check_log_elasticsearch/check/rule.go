@@ -10,38 +10,26 @@ import (
 )
 
 // Definition of a rule to apply on every hit from the Elastcsearch Search
-// result. The Description is only used for documentation/readability
-// purpose. The name of the rule will be used as metric name unless overwritten
-// by the MetricName field.
-// Pattern specifies a list of patterns which are checked against the fields in
-// the hit. If UseAnd is true, all Pattern must match (AND), if it is set to
-// false, one of the Pattern suffices (OR). If a hit matches, the Exclude
-// pattern are checked. If one of them matches, the hit will be considered not
-// a match.
-// Warning and Critical are valid Nagios/Icinga ranges for the number of hits
-// since the last time, the check was run.  They are parsed into warnRange and
-// critRange.
-// OutputFields specifies, which field content should be output to Nagios/Icinga
-// and OutputLines limits the number of lines to output
+// result.
 type Rule struct {
-	Description  string    `json:"description" yaml:"description"`
-	MetricName   string    `json:"metric_name" yaml:"metric_name"`
-	Pattern      []Pattern `json:"pattern" yaml:"pattern"`
-	Exclude      []Pattern `json:"exclude" yaml:"exclude"`
-	UseAnd       bool      `json:"use_and" yaml:"use_and"`
-	Warning      string    `json:"warning" yaml:"warning"`
-	Critical     string    `json:"critical" yaml:"critical"`
-	OutputFields []string  `json:"output_fields" yaml:"output_fields"`
-	OutputLines  int       `json:"output_lines" yaml:"output_lines"`
+	Description  string    `json:"description" yaml:"description"`     // Only used for documentation/readability purpose.
+	MetricName   string    `json:"metric_name" yaml:"metric_name"`     // The rule name will be used as metric name unless overwritten here
+	Pattern      []Pattern `json:"pattern" yaml:"pattern"`             // A list of patterns which are checked against the fields in the hit
+	Exclude      []Pattern `json:"exclude" yaml:"exclude"`             // If a hit matches, the Exclude pattern are checked. If one of them matches, the hit will be considered not a match
+	UseAnd       bool      `json:"use_and" yaml:"use_and"`             // If true, all Pattern must match (AND), otherwise one of the Pattern suffices (OR).
+	StopOnMatch  bool      `json:"stop_on_match" yaml:"stop_on_match"` // Stop evaluating other rules if thhis rule matches
+	Warning      string    `json:"warning" yaml:"warning"`             // Valid Nagios/Icinga range for the number of hits since the last time, the check was run
+	Critical     string    `json:"critical" yaml:"critical"`           // Valid Nagios/Icinga range for the number of hits since the last time, the check was run
+	OutputFields []string  `json:"output_fields" yaml:"output_fields"` // Which field content should be output to Nagios/Icinga
+	OutputLines  int       `json:"output_lines" yaml:"output_lines"`   // Limits the number of lines to output
 	warnRange    *nagiosplugin.Range
 	critRange    *nagiosplugin.Range
 }
 
-// A Pattern consists of the name of a Field in the hit from the Elasticsearch
-// Search result and a GO regular expression in the Regex field.
+// Pattern definition for Rules
 type Pattern struct {
-	Field string `json:"field" yaml:"field"`
-	Regex string `json:"regex" yaml:"regex"`
+	Field string `json:"field" yaml:"field"` // Name of a Field in the hit from the Elasticsearch Search
+	Regex string `json:"regex" yaml:"regex"` // GO regular expression to match
 }
 
 // Checks the provided Hit against the rule.
@@ -115,7 +103,7 @@ func (r Rule) isMatch(Hit elasticsearch.HitElement) (bool, error) {
 
 // Generates a slice of field contents from an elasticsearch hit for the fields
 // listed in rule.OutputFields
-func (rule Rule)getOutputLines(hit elasticsearch.ElasticsearchHitList) []string {
+func (rule Rule) getOutputLines(hit elasticsearch.ElasticsearchHitList) []string {
 	var lines []string
 	if len(rule.OutputFields) > 0 {
 		for _, field := range rule.OutputFields {
@@ -127,4 +115,3 @@ func (rule Rule)getOutputLines(hit elasticsearch.ElasticsearchHitList) []string 
 	}
 	return lines
 }
-

@@ -14,18 +14,18 @@ import (
 
 // Actions is the contents of an action file. It is a hash with currently only one element, an array auf Action objects
 type Actions struct {
-	Actions []Action `json:"actions" yaml:"actions"`
+	Actions []Action `json:"actions" yaml:"actions"` // A list of actions
 }
 
 // Action specifies one action to be execuded by the check. Currently, only Elasticsearch queries are supported
 type Action struct {
-	Name           string          `json:"name" yaml:"name"`
-	History        uint64          `json:"history" yaml:"history"`
-	Index          string          `json:"index" yaml:"index"`
-	Query          string          `json:"query" yaml:"query"`
-	Rules          map[string]Rule `json:"rule" yaml:"rules"`
-	Limit          uint            `json:"limit" yaml:"limit"`
-	StatusFile     string          `json:"statusfile" yaml:"statusfile"`
+	Name           string          `json:"name" yaml:"name"`             // Name of the action
+	History        uint64          `json:"history" yaml:"history"`       // Number of seconds to remember alarms
+	Index          string          `json:"index" yaml:"index"`           // Index name or pattern
+	Query          string          `json:"query" yaml:"query"`           // Query to be execuded
+	Rules          map[string]Rule `json:"rule" yaml:"rules"`            // A list of rules to match the query results against
+	Limit          uint            `json:"limit" yaml:"limit"`           // Limit to this number of pages (a page is 1000 hits) per call to the check. This is important for not overloading the elöasticsearch cluster or running into timeouts
+	StatusFile     string          `json:"statusfile" yaml:"statusfile"` // Where to save the timestamp and history from this run for the next one
 	last_timestamp string
 	results        RuleCount
 	StatusData     *StatusData
@@ -48,14 +48,17 @@ func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string,
 			logger.Trace().Str("id", "DBG20030001").Str("rule", rulename).Bool("match", match).Msg("Apply Rule")
 			if match {
 				matches = true
-				lines:=rule.getOutputLines(hit)
+				lines := rule.getOutputLines(hit)
 				s.results[rulename] = s.results.Add(rulename, lines, rule.OutputLines)
+				if rule.StopOnMatch {
+					break
+				}
 			}
 		}
 		if !matches {
 			s.results.Add("_nomatch", nil, 0)
 		}
-		last_timestamp, err = getTimestamp(hit,"@timestamp")
+		last_timestamp, err = getTimestamp(hit, "@timestamp")
 		if err != nil {
 			return "", err
 		}
@@ -77,7 +80,7 @@ func getTimestamp(hit elasticsearch.ElasticsearchHitList, fieldname string) (str
 	}
 	ts, found = hit.Source.GetString(fieldname)
 	if !found {
-		err := errors.New("Document is missing field "+fieldname)
+		err := errors.New("Document is missing field " + fieldname)
 		logger.Error().Str("id", "ERR20030001").
 			Str("field", fieldname).
 			Err(err).
@@ -99,15 +102,15 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 			logger.Debug().Str("id", "DBG20080001").Str("threshold", rule.Critical).Str("type", "critical").Msg("Critical threshold reached")
 			nagios.AddResult(nagiosplugin.CRITICAL, fmt.Sprintf("%v/%v", a.Name, rulename))
 			nagios.AddLongPluginOutput(fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", c, rulename, a.Name, rule.Critical))
-			a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
-			a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.CRITICAL), rulename, c)
+			lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
+			a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.CRITICAL), rulename, c, lines)
 		} else {
 			if rule.warnRange.CheckUint64(c) {
 				logger.Debug().Str("id", "DBG20080002").Str("threshold", rule.Warning).Str("type", "warning").Msg("Warning threshold reached")
 				nagios.AddResult(nagiosplugin.WARNING, fmt.Sprintf("%v/%v", a.Name, rulename))
 				nagios.AddLongPluginOutput(fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", c, rulename, a.Name, rule.Warning))
-				a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
-				a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.WARNING), rulename, c)
+				lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
+				a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.WARNING), rulename, c, lines)
 			} else {
 				logger.Debug().Str("id", "DBG20080003").Str("type", "ok").Msg("No threshold reached")
 				nagios.AddResult(nagiosplugin.OK, fmt.Sprintf("%v/%v", a.Name, rulename))
@@ -152,6 +155,9 @@ func (a Action) HistoricResults(nagios *nagiosplugin.Check) {
 			}
 			nagios.AddResult(n, fmt.Sprintf("%v/%v (historic)", a.Name, h.Rule))
 			nagios.AddLongPluginOutput(fmt.Sprintf("Reporting unhandled historic event %v for rule %v for action %v which occurred on %v", h.Uuid, h.Rule, a.Name, h.Timestamp))
+			for _, l := range h.Lines {
+				nagios.AddLongPluginOutput(fmt.Sprintf("   %s", l))
+			}
 			hc++
 		}
 	}

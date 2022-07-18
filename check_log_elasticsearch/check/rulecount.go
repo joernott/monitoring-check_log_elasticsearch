@@ -13,8 +13,8 @@ type RuleCount map[string]RuleCountEntry
 // Every Renty consists of a number of Hits and a slice of Contents from all the
 // hits, which are output to Nagios/Icinga2
 type RuleCountEntry struct {
-	Count uint64
-	Lines []string
+	Count uint64   // Number of Hits
+	Lines []string // Excerpt of data
 }
 
 // Extract just the number from the RuleCount map.
@@ -41,7 +41,7 @@ func (r RuleCount) Add(Name string, Lines []string, MaxLines int) RuleCountEntry
 }
 
 // Outputs the RuleCountEntry to Nagios/Icinga2 as indented lines
-func (r RuleCountEntry) OutputRuleCountLines(nagios *nagiosplugin.Check, MaxLines int) {
+func (r RuleCountEntry) OutputRuleCountLines(nagios *nagiosplugin.Check, MaxLines int) []string {
 	logger := log.With().Str("func", "RuleCountEntry.OutputRuleCountLines").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 	l := len(r.Lines)
@@ -51,4 +51,5 @@ func (r RuleCountEntry) OutputRuleCountLines(nagios *nagiosplugin.Check, MaxLine
 	for i := 0; i < l; i++ {
 		nagios.AddLongPluginOutput(fmt.Sprintf("   %v", r.Lines[i]))
 	}
+	return r.Lines[0:l]
 }

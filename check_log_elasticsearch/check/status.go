@@ -12,12 +12,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// The information stored in the status file. It consists of a Timestamp in the
-// format expected by Elasticsearch in the timestamp field e.g. 
-// 1900-01-01T00:00:00.000Z and a Slice of historic events.
+// The information stored in the status file.
 type StatusData struct {
-	Timestamp string          `json:"timestamp" yaml:"timestamp"`
-	History   []StatusHistory `json:"history" yaml:"history"`
+	Timestamp string          `json:"timestamp" yaml:"timestamp"` // a Timestamp in the format expected by Elasticsearch in the timestamp field e.g. 1900-01-01T00:00:00.000Z
+	History   []StatusHistory `json:"history" yaml:"history"`     // Slice of historic events.
 }
 
 // A StatusHistory entry has a Uuid, a Timestamp, when it happened, the
@@ -28,12 +26,13 @@ type StatusData struct {
 // current will be used to skip over the "historic" events added during the
 // current run.
 type StatusHistory struct {
-	Uuid      string `json:"uuid" yaml:"uuid"`
-	Timestamp string `json:"timestamp" yaml:"timestamp"`
-	State     int    `json:"state" yaml:"state"`
-	Rule      string `json:"rule" yaml:"rule"`
-	Handled   bool   `json:"handled" yaml:"handled"`
-	Counter   uint64 `json:"counter" yaml:"counter"`
+	Uuid      string   `json:"uuid" yaml:"uuid"`           // Generated when adding a history entry, used for management
+	Timestamp string   `json:"timestamp" yaml:"timestamp"` //The timestamp of the check
+	State     int      `json:"state" yaml:"state"`         // State reported to Icinga/Nagios
+	Rule      string   `json:"rule" yaml:"rule"`           // Name of the rule which triggered the alarm
+	Handled   bool     `json:"handled" yaml:"handled"`     // If set to true, mark this historic entry as handled
+	Counter   uint64   `json:"counter" yaml:"counter"`     // Number of lines matching the rule
+	Lines     []string `json:"lines" yaml:"lines"`         // An except of the matchinmg lines
 	current   bool
 }
 
@@ -103,7 +102,7 @@ func ReadStatus(Filename string) (*StatusData, error) {
 }
 
 // Add a history entry to the StatusData Object
-func (status *StatusData) AddHistoryEntry(Timestamp string, State int, Rule string, Counter uint64) {
+func (status *StatusData) AddHistoryEntry(Timestamp string, State int, Rule string, Counter uint64, Lines []string) {
 	h := StatusHistory{
 		Uuid:      uuid.New().String(),
 		Timestamp: Timestamp,
@@ -111,6 +110,7 @@ func (status *StatusData) AddHistoryEntry(Timestamp string, State int, Rule stri
 		Handled:   false,
 		Rule:      Rule,
 		Counter:   Counter,
+		Lines:     Lines,
 		current:   true,
 	}
 	status.History = append(status.History, h)
@@ -146,7 +146,7 @@ func (status *StatusData) Prune(Retention uint64) {
 	status.History = new
 }
 
-// Removes one or more Entries contained in the list of Uuids from the history 
+// Removes one or more Entries contained in the list of Uuids from the history
 // of the StatusData.
 func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 	var new []StatusHistory
@@ -172,7 +172,7 @@ func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 	status.History = new
 }
 
-// Sets one or more Entries contained in the list of Uuids from the history 
+// Sets one or more Entries contained in the list of Uuids from the history
 // of the StatusData to "handled".
 func (status *StatusData) HandleHistoryEntry(Uuids []string) {
 	var new []StatusHistory
@@ -192,7 +192,7 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string) {
 			}
 		}
 		if !found {
-			h.Handled=true
+			h.Handled = true
 		}
 		new = append(new, h)
 	}
@@ -223,5 +223,8 @@ func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionForma
 			handled = "Y"
 		}
 		fmt.Printf(Format, h.Uuid, h.Timestamp, states[h.State], h.Counter, handled, h.Rule)
+		for _, l := range h.Lines {
+			fmt.Printf("   %s", l)
+		}
 	}
 }
