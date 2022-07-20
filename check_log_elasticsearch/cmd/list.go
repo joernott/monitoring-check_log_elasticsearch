@@ -15,7 +15,7 @@ var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List history entries",
 	Long:  `List history entries for a given action or for all of them`,
-	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		setupLogging()
 		err := HandleConfigFile()
 		if err != nil {

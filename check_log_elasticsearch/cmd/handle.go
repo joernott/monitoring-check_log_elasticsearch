@@ -16,7 +16,7 @@ var handleCmd = &cobra.Command{
 	Use:   "handle",
 	Short: "Handle a history entry",
 	Long:  `Mark a history entry with the provided uuid as handled`,
-	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		setupLogging()
 		err := HandleConfigFile()
 		if err != nil {

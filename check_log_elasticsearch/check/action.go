@@ -103,14 +103,18 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 			nagios.AddResult(nagiosplugin.CRITICAL, fmt.Sprintf("%v/%v", a.Name, rulename))
 			nagios.AddLongPluginOutput(fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", c, rulename, a.Name, rule.Critical))
 			lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
-			a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.CRITICAL), rulename, c, lines)
+			if a.History> 0 {
+				a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.CRITICAL), rulename, c, lines)
+			}
 		} else {
 			if rule.warnRange.CheckUint64(c) {
 				logger.Debug().Str("id", "DBG20080002").Str("threshold", rule.Warning).Str("type", "warning").Msg("Warning threshold reached")
 				nagios.AddResult(nagiosplugin.WARNING, fmt.Sprintf("%v/%v", a.Name, rulename))
 				nagios.AddLongPluginOutput(fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", c, rulename, a.Name, rule.Warning))
 				lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
-				a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.WARNING), rulename, c, lines)
+				if a.History> 0 {
+					a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.WARNING), rulename, c, lines)
+				}
 			} else {
 				logger.Debug().Str("id", "DBG20080003").Str("type", "ok").Msg("No threshold reached")
 				nagios.AddResult(nagiosplugin.OK, fmt.Sprintf("%v/%v", a.Name, rulename))
@@ -158,6 +162,7 @@ func (a Action) HistoricResults(nagios *nagiosplugin.Check) {
 			for _, l := range h.Lines {
 				nagios.AddLongPluginOutput(fmt.Sprintf("   %s", l))
 			}
+			nagios.AddLongPluginOutput("\n")
 			hc++
 		}
 	}

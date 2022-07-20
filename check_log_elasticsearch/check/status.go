@@ -139,8 +139,12 @@ func (status *StatusData) Prune(Retention uint64) {
 			logger.Warn().Str("id", "WRN1005001").Str("timestamp", h.Timestamp).Str("format", format).Str("uuid", h.Uuid).Msg("Could not interpret timestamp while pruning history")
 			continue
 		}
-		if time.Since(ts).Seconds() < float64(Retention) {
+		s := time.Since(ts).Seconds()
+		if s < float64(Retention) {
+			logger.Trace().Float64("seconds_since_event", s).Uint64("retention", Retention).Str("uuid", h.Uuid).Msg("Retention not reached")
 			new = append(new, h)
+		} else {
+			logger.Trace().Float64("seconds_since_event", s).Uint64("retention", Retention).Str("uuid", h.Uuid).Msg("Retention reached, removing " + h.Uuid)
 		}
 	}
 	status.History = new

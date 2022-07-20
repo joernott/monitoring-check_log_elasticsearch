@@ -17,7 +17,7 @@ var checkCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Check logs",
 	Long:  `Check logs in elasticsearch`,
-	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		setupLogging()
 		err := HandleConfigFile()
 		if err != nil {
@@ -50,22 +50,24 @@ var checkCmd = &cobra.Command{
 			parsedTimeout,
 		)
 		if err != nil {
-			log.Fatal().Err(err).Msg("UNKNOWN: Could not create connection to Elasticsearch")
 			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not create connection to Elasticsearch")
+			log.Fatal().Err(err).Msg("Could not create connection to Elasticsearch")
+			nagios.Finish()
 			return
 		}
 		c, err = check.NewCheck(viper.GetString("actionfile"), elasticsearch, nagios)
 		if err != nil {
-			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
 			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not create check")
+			log.Fatal().Err(err).Msg("Could not create check")
+			nagios.Finish()
 			return
 		}
 		err = c.Execute(viper.GetStringSlice("action"))
 		if err != nil {
-			log.Fatal().Msg("UNKNOWN: Could not execute check")
-			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not execute check")
 			return
 		}
+		log.Info().Msg("Check finished successfully")
+		nagios.Finish()
 		return
 	},
 }

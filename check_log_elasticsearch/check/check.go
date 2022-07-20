@@ -123,11 +123,17 @@ func (c *Check) Execute(Actions []string) error {
 		q := strings.ReplaceAll(a.Query, "_TIMESTAMP_", timestamp)
 		pagination, err := c.connection.StartPaginatedSearch(a.Index, q)
 		if err != nil {
+			reason := ""
+			if pagination != nil {
+				if len(pagination.Results) > 0 {
+					reason = pagination.Results[0].Error.Reason
+				}
+			}
 			logger.Error().Str("id", "ERR20020001").
 				Str("timestamp", timestamp).
 				Str("parsed_query", q).
 				Int("page", 0).
-				Str("reason", pagination.Results[0].Error.Reason).
+				Str("reason", reason).
 				Err(err).
 				Msg("Could not run search '" + a.Name + "'")
 			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("%v. Could not initiate paginated search %v on index %v. Query is %v", err, a.Name, a.Index, a.Query))
@@ -190,10 +196,10 @@ func actionInList(action string, list []string) bool {
 }
 
 // Output all results for all actions
-func (c Check) outputAll(Actions []string) error {
+func (c *Check) outputAll(Actions []string) error {
 	logger := log.With().Str("func", "Check.outputAll").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
-	for _, a := range c.actions.Actions {
+	for i, a := range c.actions.Actions {
 		if !actionInList(a.Name, Actions) {
 			logger.Debug().Str("id", "DBG20120001").
 				Str("name", a.Name).
@@ -203,10 +209,10 @@ func (c Check) outputAll(Actions []string) error {
 			continue
 		}
 		if a.History > 0 {
-			a.StatusData.Prune(a.History)
+			c.actions.Actions[i].StatusData.Prune(a.History)
 		}
 		a.outputResults(c.nagios)
-		err := a.StatusData.Save(a.StatusFile)
+		err := c.actions.Actions[i].StatusData.Save(a.StatusFile)
 		if err != nil {
 			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("Could not save last timestamp %v to %v, error %v", a.StatusData.Timestamp, a.StatusFile, err))
 			return err

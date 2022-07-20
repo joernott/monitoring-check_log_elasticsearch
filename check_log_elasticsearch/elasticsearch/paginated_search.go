@@ -12,20 +12,20 @@ import (
 // Pagination data needed for a paginated search.
 // See https://www.elastic.co/guide/en/elasticsearch/reference/current/paginate-search-results.html for more information.
 type ElasticsearchQueryPagination struct {
-	Pit         ElasticsearchPit         `json:"pit"`			// Elasticsearch Point In Time
-	SearchAfter ElasticsearchSearchAfter `json:"search_after"`	// Information from the last search to be fed to the next as starting point
-	Size        uint                     `json:"size"`          // The maximum size of a page
+	Pit         ElasticsearchPit         `json:"pit"`          // Elasticsearch Point In Time
+	SearchAfter ElasticsearchSearchAfter `json:"search_after"` // Information from the last search to be fed to the next as starting point
+	Size        uint                     `json:"size"`         // The maximum size of a page
 }
 
 // A paginated search repeats the same query on the same index, every time
 // continuing, where the last query ended. This keeps track of the data needed
 // for a paginated search.
 type ElasticsearchPaginatedSearch struct {
-	e           *Elasticsearch					// Link back to the elasticsearch connection
-	Index       string							// Name of the index
-	Query       string							// The actual query
-	Pagination  ElasticsearchQueryPagination	// Pagination data from the previous run
-	Results     []*ElasticsearchResult			// Results from every search
+	e          *Elasticsearch               // Link back to the elasticsearch connection
+	Index      string                       // Name of the index
+	Query      string                       // The actual query
+	Pagination ElasticsearchQueryPagination // Pagination data from the previous run
+	Results    []*ElasticsearchResult       // Results from every search
 }
 
 // The information returned for search after is a dynamic mix of data types

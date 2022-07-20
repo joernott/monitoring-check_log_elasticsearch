@@ -21,7 +21,7 @@ var rootCmd = &cobra.Command{
 	Use:   "check_log_elasticsearch",
 	Short: "Check logs stored in elasticsearch",
 	Long:  `check_log_elasticsearch checks log files stored in an elasticsearch cluster and allows for complex filters and multiple ways of collecting statistics.`,
-	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		setupLogging()
 		err := HandleConfigFile()
 		if err != nil {

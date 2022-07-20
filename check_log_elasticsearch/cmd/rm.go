@@ -14,7 +14,7 @@ var rmCmd = &cobra.Command{
 	Use:   "rm",
 	Short: "Remove a history entry",
 	Long:  `Removes a history entry with the provided uuid from a status`,
-	PersistentPreRun: func(ccmd *cobra.Command, args []string) {
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		setupLogging()
 		err := HandleConfigFile()
 		if err != nil {
