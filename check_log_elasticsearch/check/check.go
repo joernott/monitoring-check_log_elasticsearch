@@ -9,6 +9,7 @@ import (
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/check_log_elasticsearch/elasticsearch"
 	"github.com/joernott/nagiosplugin/v2"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
 )
@@ -97,6 +98,7 @@ func readActionFile(ActionFile string) (*Actions, error) {
 // Execute all Actions listed in the Actions parameter. If it is empty, all
 // actions are executed
 func (c *Check) Execute(Actions []string) error {
+	var found bool
 	logger := log.With().Str("func", "Execute").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 
@@ -107,6 +109,7 @@ func (c *Check) Execute(Actions []string) error {
 				Msg("Search not in requested actions, skipping")
 			continue
 		}
+		found = true
 		s, err := ReadStatus(a.StatusFile)
 		if err != nil {
 			logger.Error().Str("id", "ERR20000003").
@@ -176,6 +179,18 @@ func (c *Check) Execute(Actions []string) error {
 			}
 			logger.Info().Str("id", "INF20020001").Int("page", page).Int("hits", hc).Str("timestamp", timestamp).Msg("Next page")
 		}
+	}
+	if !found {
+		arr := zerolog.Arr()
+		for _, a := range Actions {
+			arr.Str(a)
+		}
+		logger.Error().Str("id", "ERR20020003").
+			Str("error", "Actions don't match action file").
+			Array("actions", arr).
+			Str("file", c.actionsFile).
+			Msg("None of the actions were found in the action file")
+		c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("None of the actions %v were found in the action file %v", Actions, c.actionsFile))
 	}
 	c.outputAll(Actions)
 	return nil

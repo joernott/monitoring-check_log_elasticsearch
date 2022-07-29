@@ -9,7 +9,7 @@ License:        BSD
 Group:          Sytem/Utilities
 Vendor:         Ott-Consult UG
 Packager:       Joern Ott
-Url:            https://github.com/joernott/monitoring-check_f5_throughput
+Url:            https://github.com/joernott/monitoring-check_log_elasticsearch
 Source0:        monitoring-check_log_elasticsearch-%{version}.tar.gz
 BuildArch:      x86_64
 
