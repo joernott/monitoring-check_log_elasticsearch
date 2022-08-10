@@ -152,7 +152,7 @@ func (status *StatusData) Prune(Retention uint64) {
 
 // Removes one or more Entries contained in the list of Uuids from the history
 // of the StatusData.
-func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
+func (status *StatusData) RemoveHistoryEntry(Uuids []string, All bool) {
 	var new []StatusHistory
 
 	logger := log.With().Str("func", "status.RemoveHistoryEntry").Str("package", "check").Logger()
@@ -161,7 +161,7 @@ func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 	for _, h := range status.History {
 		found := false
 		for _, u := range Uuids {
-			if h.Uuid == u {
+			if h.Uuid == u || All {
 				logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Removing uuid")
 				found = true
 				break
@@ -178,7 +178,7 @@ func (status *StatusData) RemoveHistoryEntry(Uuids []string) {
 
 // Sets one or more Entries contained in the list of Uuids from the history
 // of the StatusData to "handled".
-func (status *StatusData) HandleHistoryEntry(Uuids []string) {
+func (status *StatusData) HandleHistoryEntry(Uuids []string, All bool) {
 	var new []StatusHistory
 
 	logger := log.With().Str("func", "status.RemoveHistoryEntry").Str("package", "check").Logger()
@@ -187,7 +187,7 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string) {
 	for _, h := range status.History {
 		found := false
 		for _, u := range Uuids {
-			if h.Uuid == u {
+			if h.Uuid == u || All {
 				logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Removing uuid")
 				found = true
 				break

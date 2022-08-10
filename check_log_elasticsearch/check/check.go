@@ -30,6 +30,8 @@ type Check struct {
 func NewCheck(ActionsFile string, Connection *elasticsearch.Elasticsearch, Nagios *nagiosplugin.Check) (*Check, error) {
 	var actions *Actions
 	var c *Check
+	var o OrderedRuleList
+	
 	logger := log.With().Str("func", "NewCheck").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 	c = new(Check)
@@ -67,8 +69,10 @@ func NewCheck(ActionsFile string, Connection *elasticsearch.Elasticsearch, Nagio
 				return nil, err
 			}
 			actions.Actions[i].Rules[rulename] = r
+			o = o.Append(rulename,r.Order)
 		}
 		actions.Actions[i].results = actions.Actions[i].newRulecount()
+		actions.Actions[i].orderedRules = o.Sort()
 	}
 	c.actions = actions
 	return c, nil
@@ -254,7 +258,7 @@ func (c *Check) GetAction(Name string) (Action, error) {
 // parameter specifies the actions to look for, if it is empty, all actions will
 // be checked. The parameter Uuids is a list of all the historic events to
 // change.
-func (c *Check) HandleHistory(Actions []string, Uuids []string) error {
+func (c *Check) HandleHistory(Actions []string, Uuids []string, All bool) error {
 	logger := log.With().Str("func", "ClearHistory").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 	for _, a := range c.actions.Actions {
@@ -271,7 +275,7 @@ func (c *Check) HandleHistory(Actions []string, Uuids []string) error {
 			log.Error().Str("id", "ERR20120001").Str("filename", a.StatusFile).Err(err).Msg("Could not read status file")
 			return err
 		}
-		s.HandleHistoryEntry(Uuids)
+		s.HandleHistoryEntry(Uuids, All)
 		err = s.Save(a.StatusFile)
 		if err != nil {
 			return err
@@ -284,7 +288,7 @@ func (c *Check) HandleHistory(Actions []string, Uuids []string) error {
 // parameter specifies the actions to look for, if it is empty, all actions will
 // be checked. The parameter Uuids is a list of all the historic events to
 // delete
-func (c *Check) RmHistory(Actions []string, Uuids []string) error {
+func (c *Check) RmHistory(Actions []string, Uuids []string, All bool) error {
 	logger := log.With().Str("func", "ClearHistory").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 	for _, a := range c.actions.Actions {
@@ -301,7 +305,7 @@ func (c *Check) RmHistory(Actions []string, Uuids []string) error {
 			log.Error().Str("id", "ERR20120001").Str("filename", a.StatusFile).Err(err).Msg("Could not read status file")
 			return err
 		}
-		s.RemoveHistoryEntry(Uuids)
+		s.RemoveHistoryEntry(Uuids, All)
 		err = s.Save(a.StatusFile)
 		if err != nil {
 			return err

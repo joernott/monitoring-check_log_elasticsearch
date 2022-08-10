@@ -19,17 +19,19 @@ type Actions struct {
 
 // Action specifies one action to be execuded by the check. Currently, only Elasticsearch queries are supported
 type Action struct {
-	Name           string          `json:"name" yaml:"name"`             // Name of the action
-	History        uint64          `json:"history" yaml:"history"`       // Number of seconds to remember alarms
-	Index          string          `json:"index" yaml:"index"`           // Index name or pattern
-	Query          string          `json:"query" yaml:"query"`           // Query to be execuded
-	Rules          map[string]Rule `json:"rule" yaml:"rules"`            // A list of rules to match the query results against
-	Limit          uint            `json:"limit" yaml:"limit"`           // Limit to this number of pages (a page is 1000 hits) per call to the check. This is important for not overloading the elöasticsearch cluster or running into timeouts
-	StatusFile     string          `json:"statusfile" yaml:"statusfile"` // Where to save the timestamp and history from this run for the next one
+	Name           string   `json:"name" yaml:"name"`             // Name of the action
+	History        uint64   `json:"history" yaml:"history"`       // Number of seconds to remember alarms
+	Index          string   `json:"index" yaml:"index"`           // Index name or pattern
+	Query          string   `json:"query" yaml:"query"`           // Query to be execuded
+	Rules          RuleList `json:"rule" yaml:"rules"`            // A list of rules to match the query results against
+	Limit          uint     `json:"limit" yaml:"limit"`           // Limit to this number of pages (a page is 1000 hits) per call to the check. This is important for not overloading the elöasticsearch cluster or running into timeouts
+	StatusFile     string   `json:"statusfile" yaml:"statusfile"` // Where to save the timestamp and history from this run for the next one
 	last_timestamp string
 	results        RuleCount
 	StatusData     *StatusData
+	orderedRules   OrderedRuleList
 }
+
 
 // countResults iterates over the data returned by an Elasticsearch search and checks for every hit (document) on which rule it matches
 func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string, error) {
@@ -40,17 +42,19 @@ func (s Action) countResults(result *elasticsearch.ElasticsearchResult) (string,
 	for _, hit := range result.Hits.Hits {
 		s.results.Add("_total", nil, 0)
 		matches := false
-		for rulename, rule := range s.Rules {
-			match, err := rule.isMatch(hit.Fields)
+		for _, r := range s.orderedRules {
+			rulename, rule:=r.Get(s.Rules)
+			match, err := rule.isMatch(hit.Fields, hit.Id, rulename)
 			if err != nil {
 				return "", err
 			}
-			logger.Trace().Str("id", "DBG20030001").Str("rule", rulename).Bool("match", match).Msg("Apply Rule")
+			logger.Trace().Str("id", "DBG20030001").Str("rule", rulename).Bool("match", match).Bool("stop_on_match", rule.StopOnMatch).Str("document_id", hit.Id).Msg("Apply rule " + rulename)
 			if match {
 				matches = true
 				lines := rule.getOutputLines(hit)
 				s.results[rulename] = s.results.Add(rulename, lines, rule.OutputLines)
 				if rule.StopOnMatch {
+					logger.Trace().Str("id", "DBG20030001").Str("rule", rulename).Bool("match", match).Bool("stop_on_match", rule.StopOnMatch).Str("document_id", hit.Id).Msg("Match found, skipping remaining rules")
 					break
 				}
 			}
@@ -95,7 +99,8 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 	logger := log.With().Str("func", "Action.outputResults").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
-	for rulename, rule := range a.Rules {
+	for _, r := range a.orderedRules {
+		rulename, rule:=r.Get(a.Rules)
 		c := a.results.Count(rulename)
 		logger := logger.With().Str("search", a.Name).Str("rule", rulename).Uint64("value", c).Logger()
 		if rule.critRange.CheckUint64(c) {
@@ -103,7 +108,7 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 			nagios.AddResult(nagiosplugin.CRITICAL, fmt.Sprintf("%v/%v", a.Name, rulename))
 			nagios.AddLongPluginOutput(fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", c, rulename, a.Name, rule.Critical))
 			lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
-			if a.History> 0 {
+			if a.History > 0 {
 				a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.CRITICAL), rulename, c, lines)
 			}
 		} else {
@@ -112,7 +117,7 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 				nagios.AddResult(nagiosplugin.WARNING, fmt.Sprintf("%v/%v", a.Name, rulename))
 				nagios.AddLongPluginOutput(fmt.Sprintf("Value %v for rule %v in search %v exceeds threshold %v", c, rulename, a.Name, rule.Warning))
 				lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
-				if a.History> 0 {
+				if a.History > 0 {
 					a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.WARNING), rulename, c, lines)
 				}
 			} else {

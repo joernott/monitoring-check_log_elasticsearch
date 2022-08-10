@@ -83,6 +83,9 @@ var Timeout string
 // Global variable for cobra, list of uuids for handle and rm subcommands
 var Uuid []string
 
+// Global variable for cobra, handle/rm all uuids
+var All bool
+
 // Run the checkcommand
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -110,7 +113,9 @@ func init() {
 	checkCmd.PersistentFlags().StringVarP(&Timeout, "timeout", "T", "2m", "Timeout understood by time.ParseDuration")
 
 	handleCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Clear entry with the given uuid from history")
-	rmCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Clear entry with the given uuid from history")
+	rmCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Remove entry with the given uuid from history")
+	handleCmd.PersistentFlags().BoolVarP(&All, "all", "A", false, "Clear all entries from history")
+	rmCmd.PersistentFlags().BoolVarP(&All, "all", "A", false, "Remove all entries from history")
 
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(handleCmd)
@@ -133,6 +138,7 @@ func init() {
 	viper.SetDefault("timeout", "2m")
 
 	viper.SetDefault("uuid", []string{})
+	viper.SetDefault("all", false)
 
 	viper.BindPFlag("loglevel", rootCmd.PersistentFlags().Lookup("loglevel"))
 	viper.BindPFlag("logfile", rootCmd.PersistentFlags().Lookup("logfile"))
@@ -151,6 +157,8 @@ func init() {
 
 	viper.BindPFlag("uuid", handleCmd.PersistentFlags().Lookup("uuid"))
 	viper.BindPFlag("uuid", rmCmd.PersistentFlags().Lookup("uuid"))
+	viper.BindPFlag("all", handleCmd.PersistentFlags().Lookup("all"))
+	viper.BindPFlag("all", rmCmd.PersistentFlags().Lookup("all"))
 
 	viper.SetEnvPrefix("cle")
 	viper.BindEnv("password")

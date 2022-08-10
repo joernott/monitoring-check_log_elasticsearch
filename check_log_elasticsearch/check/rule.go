@@ -9,11 +9,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// List of rules
+type RuleList map[string]Rule
+
 // Definition of a rule to apply on every hit from the Elastcsearch Search
 // result.
 type Rule struct {
 	Description  string    `json:"description" yaml:"description"`     // Only used for documentation/readability purpose.
 	MetricName   string    `json:"metric_name" yaml:"metric_name"`     // The rule name will be used as metric name unless overwritten here
+	Order        int        `json:"order" yaml:"order"`                // Order for sorting the rules
 	Pattern      []Pattern `json:"pattern" yaml:"pattern"`             // A list of patterns which are checked against the fields in the hit
 	Exclude      []Pattern `json:"exclude" yaml:"exclude"`             // If a hit matches, the Exclude pattern are checked. If one of them matches, the hit will be considered not a match
 	UseAnd       bool      `json:"use_and" yaml:"use_and"`             // If true, all Pattern must match (AND), otherwise one of the Pattern suffices (OR).
@@ -33,8 +37,8 @@ type Pattern struct {
 }
 
 // Checks the provided Hit against the rule.
-func (r Rule) isMatch(Hit elasticsearch.HitElement) (bool, error) {
-	logger := log.With().Str("func", "isMatch").Str("package", "check").Logger()
+func (r Rule) isMatch(Hit elasticsearch.HitElement, DocumentId string, RuleName string) (bool, error) {
+	logger := log.With().Str("func", "isMatch").Str("package", "check").Str("document_id", DocumentId).Str("rule", RuleName).Logger()
 	logger.Trace().Msg("Enter func")
 	found := false
 	except := false

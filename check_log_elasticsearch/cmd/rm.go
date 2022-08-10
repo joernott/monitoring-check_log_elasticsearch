@@ -30,7 +30,7 @@ var rmCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
 			os.Exit(2)
 		}
-		err = c.RmHistory(viper.GetStringSlice("action"), viper.GetStringSlice("uuid"))
+		err = c.RmHistory(viper.GetStringSlice("action"), viper.GetStringSlice("uuid"), viper.GetBool("all"))
 		if err != nil {
 			os.Exit(2)
 		}
