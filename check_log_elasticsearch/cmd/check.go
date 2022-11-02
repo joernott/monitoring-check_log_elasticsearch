@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/joernott/nagiosplugin/v2"
 
@@ -27,6 +28,7 @@ var checkCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var c *check.Check
+		var command string
 
 		nagios := nagiosplugin.NewCheck()
 		nagios.SetVerbosity(nagiosplugin.VERBOSITY_MULTI_LINE)
@@ -55,7 +57,11 @@ var checkCmd = &cobra.Command{
 			nagios.Finish()
 			return
 		}
-		c, err = check.NewCheck(viper.GetString("actionfile"), elasticsearch, nagios)
+
+		if viper.GetBool("showcommand") {
+			command = os.Args[0] + " handle -f "+ viper.GetString("actionfile")
+		}
+		c, err = check.NewCheck(viper.GetString("actionfile"), elasticsearch, nagios, command)
 		if err != nil {
 			nagios.AddResult(nagiosplugin.UNKNOWN, "Could not create check")
 			log.Fatal().Err(err).Msg("Could not create check")

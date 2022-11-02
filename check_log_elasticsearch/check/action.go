@@ -95,7 +95,7 @@ func getTimestamp(hit elasticsearch.ElasticsearchHitList, fieldname string) (str
 }
 
 // Generate the Nagios output for the current action
-func (a Action) outputResults(nagios *nagiosplugin.Check) {
+func (a Action) outputResults(nagios *nagiosplugin.Check, command string) {
 	logger := log.With().Str("func", "Action.outputResults").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 	ts := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
@@ -110,6 +110,10 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 			lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
 			if a.History > 0 {
 				a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.CRITICAL), rulename, c, lines)
+				if command != "" {
+					h:=a.StatusData.History[len(a.StatusData.History)-1]
+					nagios.AddLongPluginOutput(command+ "-U " +  h.Uuid)
+				}
 			}
 		} else {
 			if rule.warnRange.CheckUint64(c) {
@@ -119,6 +123,10 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 				lines := a.results[rulename].OutputRuleCountLines(nagios, rule.OutputLines)
 				if a.History > 0 {
 					a.StatusData.AddHistoryEntry(ts, int(nagiosplugin.WARNING), rulename, c, lines)
+					if command != "" {
+						h:=a.StatusData.History[len(a.StatusData.History)-1]
+						nagios.AddLongPluginOutput(command+ "-U " +  h.Uuid)
+					}
 				}
 			} else {
 				logger.Debug().Str("id", "DBG20080003").Str("type", "ok").Msg("No threshold reached")
@@ -137,12 +145,12 @@ func (a Action) outputResults(nagios *nagiosplugin.Check) {
 	nagios.AddPerfDatum(a.Name+"_lines", "c", t, nil, nil, nil, nil)
 	n, _ := nagiosplugin.NewFloatPerfDatumValue(float64(a.results.Count("_nomatch")))
 	nagios.AddPerfDatum(a.Name+"_not_matched", "c", n, nil, nil, nil, nil)
-	a.HistoricResults(nagios)
+	a.HistoricResults(nagios, command)
 	return
 }
 
 // Generate the Nagios output for historic data stored in the status file
-func (a Action) HistoricResults(nagios *nagiosplugin.Check) {
+func (a Action) HistoricResults(nagios *nagiosplugin.Check, command string) {
 	var n nagiosplugin.Status
 	var hc int
 	logger := log.With().Str("func", "HistoricResults").Str("package", "check").Logger()
@@ -164,9 +172,13 @@ func (a Action) HistoricResults(nagios *nagiosplugin.Check) {
 			}
 			nagios.AddResult(n, fmt.Sprintf("%v/%v (historic)", a.Name, h.Rule))
 			nagios.AddLongPluginOutput(fmt.Sprintf("Reporting unhandled historic event %v for rule %v for action %v which occurred on %v", h.Uuid, h.Rule, a.Name, h.Timestamp))
+			if command != "" {
+				nagios.AddLongPluginOutput(command+ " -U " +  h.Uuid)
+			}
 			for _, l := range h.Lines {
 				nagios.AddLongPluginOutput(fmt.Sprintf("   %s", l))
 			}
+
 			nagios.AddLongPluginOutput("\n")
 			hc++
 		}

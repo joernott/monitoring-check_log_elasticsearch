@@ -22,12 +22,13 @@ type Check struct {
 	connection  *elasticsearch.Elasticsearch
 	nagios      *nagiosplugin.Check
 	actions     *Actions
+	Command     string
 }
 
 // Creates a Check object containing the connection object to Elasticsearch, a
 // Nagios object This also initializes and loads the action data structure from
 // the Actions file
-func NewCheck(ActionsFile string, Connection *elasticsearch.Elasticsearch, Nagios *nagiosplugin.Check) (*Check, error) {
+func NewCheck(ActionsFile string, Connection *elasticsearch.Elasticsearch, Nagios *nagiosplugin.Check, Command string) (*Check, error) {
 	var actions *Actions
 	var c *Check
 	var o OrderedRuleList
@@ -38,6 +39,7 @@ func NewCheck(ActionsFile string, Connection *elasticsearch.Elasticsearch, Nagio
 	c.actionsFile = ActionsFile
 	c.connection = Connection
 	c.nagios = Nagios
+	c.Command = Command
 
 	actions, err := readActionFile(ActionsFile)
 	if err != nil {
@@ -230,7 +232,7 @@ func (c *Check) outputAll(Actions []string) error {
 		if a.History > 0 {
 			c.actions.Actions[i].StatusData.Prune(a.History)
 		}
-		a.outputResults(c.nagios)
+		a.outputResults(c.nagios, c.Command)
 		err := c.actions.Actions[i].StatusData.Save(a.StatusFile)
 		if err != nil {
 			c.nagios.AddResult(nagiosplugin.UNKNOWN, fmt.Sprintf("Could not save last timestamp %v to %v, error %v", a.StatusData.Timestamp, a.StatusFile, err))
@@ -316,7 +318,7 @@ func (c *Check) RmHistory(Actions []string, Uuids []string, All bool) error {
 
 // Lists historic entries from the status files of the given actions. If the
 // Actions parameter is empty, all Actions are looked at.
-func (c *Check) ListHistory(Actions []string) error {
+func (c *Check) ListHistory(Actions []string, HighlightUuid bool) error {
 	logger := log.With().Str("func", "ListHistory").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 	for _, a := range c.actions.Actions {
@@ -334,7 +336,7 @@ func (c *Check) ListHistory(Actions []string) error {
 			return err
 		}
 		fmt.Println(a.Name)
-		s.PrintHistory("", true, "")
+		s.PrintHistory("", true, "", HighlightUuid, c.Command)
 	}
 	return nil
 }

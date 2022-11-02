@@ -159,14 +159,18 @@ func (status *StatusData) RemoveHistoryEntry(Uuids []string, All bool) {
 	logger.Trace().Msg("Enter func")
 
 	for _, h := range status.History {
-		found := false
-		for _, u := range Uuids {
-			if h.Uuid == u || All {
-				logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Removing uuid")
-				found = true
-				break
-			} else {
-				logger.Trace().Str("id", "DBG1006002").Str("uuid", u).Str("compare_to", h.Uuid).Msg("No match")
+		found := All
+		if found {
+			logger.Trace().Str("id", "DBG1006001").Str("uuid", h.Uuid).Msg("Removing all uuids")
+		} else {
+			for _, u := range Uuids {
+				if h.Uuid == u {
+					logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Removing uuid")
+					found = true
+					break
+				} else {
+					logger.Trace().Str("id", "DBG1006002").Str("uuid", u).Str("compare_to", h.Uuid).Msg("No match")
+				}
 			}
 		}
 		if !found {
@@ -185,14 +189,18 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string, All bool) {
 	logger.Trace().Msg("Enter func")
 
 	for _, h := range status.History {
-		found := false
-		for _, u := range Uuids {
-			if h.Uuid == u || All {
-				logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Removing uuid")
-				found = true
-				break
-			} else {
-				logger.Trace().Str("id", "DBG1006002").Str("uuid", u).Str("compare_to", h.Uuid).Msg("No match")
+		found := All
+		if found {
+			logger.Trace().Str("id", "DBG1006001").Str("uuid", h.Uuid).Msg("Handle all uuids")
+		} else {
+			for _, u := range Uuids {
+				if h.Uuid == u {
+					logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Handle uuid")
+					found = true
+					break
+				} else {
+					logger.Trace().Str("id", "DBG1006002").Str("uuid", u).Str("compare_to", h.Uuid).Msg("No match")
+				}
 			}
 		}
 		if !found {
@@ -204,31 +212,38 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string, All bool) {
 }
 
 // Print a formatted list of history entries to stdout.
-func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionFormat string) {
+func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionFormat string, HighlightUuid bool, Command string) {
 	logger := log.With().Str("func", "status.PrintHistory").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 
 	if Format == "" {
-		Format = "%-36s %-24s %-8s %6d %1s %-16s\n"
+		Format = "%-36s %-24s %-8s %6d %7s %-16s\n"
 	}
 	if CaptionFormat == "" {
-		CaptionFormat = "%-36s %-24s %-8s %-1s %6s %-16s\n"
+		CaptionFormat = "%-36s %-24s %-8s %7s %1s %-16s\n"
 	}
 
 	states := [4]string{"OK", "WARNING", "CRITICAL", "UNKNOWN"}
 	if Caption {
 		fmt.Printf(CaptionFormat, "UUID", "Date/Time", "State", "#", "Handled", "Rule")
 	}
-	logger.Trace().Int("count", len(status.History)).Msg("Entries to list")
+	logger.Trace().Int("count", len(status.History)).Bool("highlight_uuid", HighlightUuid).Msg("Entries to list")
 
 	for _, h := range status.History {
 		handled := "N"
 		if h.Handled {
 			handled = "Y"
 		}
-		fmt.Printf(Format, h.Uuid, h.Timestamp, states[h.State], h.Counter, handled, h.Rule)
+		u:=h.Uuid
+		if HighlightUuid {
+			u="\033[34m" + u + "\033[0m"
+		}
+		fmt.Printf(Format, u, h.Timestamp, states[h.State], h.Counter, handled, h.Rule)
+		if Command != "" {
+			fmt.Printf("   %s -U %s\n", Command, h.Uuid)
+		}
 		for _, l := range h.Lines {
-			fmt.Printf("   %s", l)
+			fmt.Printf("   %s\n", l)
 		}
 	}
 }
