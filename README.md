@@ -27,13 +27,13 @@ Available Commands:
   rm          Remove a history entry
 
 Flags:
-  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are speci
-fied)
+  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)
   -f, --actionfile string   Action file (default "/etc/icinga2/check_log_elasticsearch/actions.yaml")
   -c, --config string       Configuration file
   -h, --help                help for check_log_elasticsearch
   -L, --logfile string      Log file (use - to log to stdout) (default "/var/log/icinga2/check_log_elasticsearch.log")
   -l, --loglevel string     Log level (default "WARN")
+  -C, --showcommand         Show the commands for handle etc.
 
 Use "check_log_elasticsearch [command] --help" for more information about a command.
 ```
@@ -64,6 +64,7 @@ fied)
   -c, --config string       Configuration file
   -L, --logfile string      Log file (use - to log to stdout) (default "/var/log/icinga2/check_log_elasticsearch.log")
   -l, --loglevel string     Log level (default "WARN")
+  -C, --showcommand         Show the commands for handle etc.
 ```
 
 The connection to elasticsearch must be specified by providing the *host*, *port*, *user* and *password* flags. Optionally, SSL can be turned off, by using "--ssl=false" and certificate validation can be turned off with the "--validatessl=false" flag. If you require a proxy, this can be provided by the *proxy* flag, use *socks*, if it is a socks proxy.
@@ -82,15 +83,16 @@ Usage:
   check_log_elasticsearch list [flags]
 
 Flags:
-  -h, --help   help for list
+  -h, --help        help for list
+  -i, --highlight   Highlight UUID
 
 Global Flags:
-  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are speci
-fied)
+  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)
   -f, --actionfile string   Action file (default "/etc/icinga2/check_log_elasticsearch/actions.yaml")
   -c, --config string       Configuration file
   -L, --logfile string      Log file (use - to log to stdout) (default "/var/log/icinga2/check_log_elasticsearch.log")
   -l, --loglevel string     Log level (default "WARN")
+  -C, --showcommand         Show the commands for handle etc.
 ```
 
 ### Handle a history entry
@@ -102,37 +104,39 @@ Usage:
   check_log_elasticsearch handle [flags]
 
 Flags:
+  -A, --all            Clear all entries from history
   -h, --help           help for handle
   -U, --uuid strings   Clear entry with the given uuid from history
 
 Global Flags:
-  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are speci
-fied)
+  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)
   -f, --actionfile string   Action file (default "/etc/icinga2/check_log_elasticsearch/actions.yaml")
   -c, --config string       Configuration file
   -L, --logfile string      Log file (use - to log to stdout) (default "/var/log/icinga2/check_log_elasticsearch.log")
   -l, --loglevel string     Log level (default "WARN")
+  -C, --showcommand         Show the commands for handle etc.
 ```
 
 ### Remove an entry from history
 
-The history is pruned on every check for the respective action when it is older than the number of seconds in the *history* field. If you don't want to wait for that to happen, you can manually remove entries with the rm command aud the uuids.
+The history is pruned on every check for the respective action when it is older than the number of seconds in the *history* field. If you don't want to wait for that to happen, you can manually remove entries with the rm command and the uuids you want to remove.
 
 ```bash
 Usage:
   check_log_elasticsearch rm [flags]
 
 Flags:
+  -A, --all            Remove all entries from history
   -h, --help           help for rm
-  -U, --uuid strings   Clear entry with the given uuid from history
+  -U, --uuid strings   Remove entry with the given uuid from history
 
 Global Flags:
-  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are speci
-fied)
+  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)
   -f, --actionfile string   Action file (default "/etc/icinga2/check_log_elasticsearch/actions.yaml")
   -c, --config string       Configuration file
   -L, --logfile string      Log file (use - to log to stdout) (default "/var/log/icinga2/check_log_elasticsearch.log")
   -l, --loglevel string     Log level (default "WARN")
+  -C, --showcommand         Show the commands for handle etc.
 ```
 
 ## Action file
