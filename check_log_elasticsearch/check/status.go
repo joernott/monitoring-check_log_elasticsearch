@@ -227,7 +227,7 @@ func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionForma
 	if Caption {
 		fmt.Printf(CaptionFormat, "UUID", "Date/Time", "State", "#", "Handled", "Rule")
 	}
-	logger.Trace().Int("count", len(status.History)).Msg("Entries to list")
+	logger.Trace().Int("count", len(status.History)).Bool("highlight_uuid", HighlightUuid).Msg("Entries to list")
 
 	for _, h := range status.History {
 		handled := "N"

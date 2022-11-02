@@ -35,6 +35,9 @@ var listCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
 			os.Exit(2)
 		}
+
+		fmt.Println(viper.GetBool("highlight"))
+
 		err = c.ListHistory(viper.GetStringSlice("action"), viper.GetBool("highlight"))
 		if err != nil {
 			os.Exit(2)
