@@ -86,6 +86,12 @@ var Uuid []string
 // Global variable for cobra, handle/rm all uuids
 var All bool
 
+// Global variable for cobra, list highlights the UUID
+var HighlightUuid bool
+
+// Global variable for cobra, show the rm/handle etc commands
+var ShowCommand bool
+
 // Run the checkcommand
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -101,6 +107,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&LogFile, "logfile", "L", "/var/log/icinga2/check_log_elasticsearch.log", "Log file (use - to log to stdout)")
 	rootCmd.PersistentFlags().StringVarP(&ActionFile, "actionfile", "f", "/etc/icinga2/check_log_elasticsearch/actions.yaml", "Action file")
 	rootCmd.PersistentFlags().StringSliceVarP(&Action, "action", "a", []string{}, "Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)")
+	rootCmd.PersistentFlags().BoolVarP(&ShowCommand, "showcommand", "C", false, "Show the commands for handle etc.")
 
 	checkCmd.PersistentFlags().BoolVarP(&UseSSL, "ssl", "s", true, "Use SSL")
 	checkCmd.PersistentFlags().BoolVarP(&ValidateSSL, "validatessl", "v", true, "Validate SSL certificate")
@@ -116,6 +123,7 @@ func init() {
 	rmCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Remove entry with the given uuid from history")
 	handleCmd.PersistentFlags().BoolVarP(&All, "all", "A", false, "Clear all entries from history")
 	rmCmd.PersistentFlags().BoolVarP(&All, "all", "A", false, "Remove all entries from history")
+	listCmd.PersistentFlags().BoolVarP(&HighlightUuid, "highlight", "i", false, "Highlight UUID")
 
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(handleCmd)
@@ -126,6 +134,7 @@ func init() {
 	viper.SetDefault("logfile", "/var/log/icinga2/check_log_elasticsearch.log")
 	viper.SetDefault("actionfile", "/etc/icinga2/check_log_elasticsearch/actions.yaml")
 	viper.SetDefault("action", "")
+	viper.SetDefault("showcommand", false)
 
 	viper.SetDefault("ssl", true)
 	viper.SetDefault("validatessl", true)
@@ -139,11 +148,13 @@ func init() {
 
 	viper.SetDefault("uuid", []string{})
 	viper.SetDefault("all", false)
+	viper.SetDefault("highlight", false)
 
 	viper.BindPFlag("loglevel", rootCmd.PersistentFlags().Lookup("loglevel"))
 	viper.BindPFlag("logfile", rootCmd.PersistentFlags().Lookup("logfile"))
 	viper.BindPFlag("actionfile", rootCmd.PersistentFlags().Lookup("actionfile"))
 	viper.BindPFlag("action", rootCmd.PersistentFlags().Lookup("action"))
+	viper.BindPFlag("showcommand", rootCmd.PersistentFlags().Lookup("showcommand"))
 
 	viper.BindPFlag("ssl", checkCmd.PersistentFlags().Lookup("ssl"))
 	viper.BindPFlag("validatessl", checkCmd.PersistentFlags().Lookup("validatessl"))
@@ -159,6 +170,7 @@ func init() {
 	viper.BindPFlag("uuid", rmCmd.PersistentFlags().Lookup("uuid"))
 	viper.BindPFlag("all", handleCmd.PersistentFlags().Lookup("all"))
 	viper.BindPFlag("all", rmCmd.PersistentFlags().Lookup("all"))
+	viper.BindPFlag("highlight", listCmd.PersistentFlags().Lookup("highlight"))
 
 	viper.SetEnvPrefix("cle")
 	viper.BindEnv("password")
