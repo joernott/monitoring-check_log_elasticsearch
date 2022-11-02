@@ -161,7 +161,7 @@ func (status *StatusData) RemoveHistoryEntry(Uuids []string, All bool) {
 	for _, h := range status.History {
 		found := All
 		if found {
-			logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Removing all uuids")
+			logger.Trace().Str("id", "DBG1006001").Str("uuid", h.Uuid).Msg("Removing all uuids")
 		} else {
 			for _, u := range Uuids {
 				if h.Uuid == u {
@@ -191,7 +191,7 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string, All bool) {
 	for _, h := range status.History {
 		found := All
 		if found {
-			logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Handle all uuids")
+			logger.Trace().Str("id", "DBG1006001").Str("uuid", h.Uuid).Msg("Handle all uuids")
 		} else {
 			for _, u := range Uuids {
 				if h.Uuid == u {
