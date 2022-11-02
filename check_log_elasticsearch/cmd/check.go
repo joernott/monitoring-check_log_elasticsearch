@@ -28,7 +28,7 @@ var checkCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var c *check.Check
-		var command String
+		var command string
 
 		nagios := nagiosplugin.NewCheck()
 		nagios.SetVerbosity(nagiosplugin.VERBOSITY_MULTI_LINE)
