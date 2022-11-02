@@ -217,10 +217,10 @@ func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionForma
 	logger.Trace().Msg("Enter func")
 
 	if Format == "" {
-		Format = "%-36s %-24s %-8s %6d %1s %-16s\n"
+		Format = "%-36s %-24s %-8s %6d %7s %-16s\n"
 	}
 	if CaptionFormat == "" {
-		CaptionFormat = "%-36s %-24s %-8s %6s %1s %-16s\n"
+		CaptionFormat = "%-36s %-24s %-8s %7s %1s %-16s\n"
 	}
 
 	states := [4]string{"OK", "WARNING", "CRITICAL", "UNKNOWN"}
@@ -236,7 +236,7 @@ func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionForma
 		}
 		u:=h.Uuid
 		if HighlightUuid {
-			u="\033[1m" + u + "\033[0m"
+			u="\033[1m_" + u + "_\033[0m"
 		}
 		fmt.Printf(Format, u, h.Timestamp, states[h.State], h.Counter, handled, h.Rule)
 		for _, l := range h.Lines {
