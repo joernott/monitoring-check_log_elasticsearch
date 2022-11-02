@@ -27,7 +27,7 @@ var handleCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		var c *check.Check
 
-		c, err := check.NewCheck(viper.GetString("actionfile"), nil, nil)
+		c, err := check.NewCheck(viper.GetString("actionfile"), nil, nil, "")
 		if err != nil {
 			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
 			os.Exit(2)

@@ -25,8 +25,12 @@ var listCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var c *check.Check
+		var command string
 
-		c, err := check.NewCheck(viper.GetString("actionfile"), nil, nil)
+		if viper.GetBool("showcommand") {
+			command = os.Args[0] + " handle -f "+ viper.GetString("actionfile")
+		}
+		c, err := check.NewCheck(viper.GetString("actionfile"), nil, nil, command)
 		if err != nil {
 			log.Fatal().Err(err).Msg("UNKNOWN: Could not create check")
 			os.Exit(2)
