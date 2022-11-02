@@ -172,12 +172,13 @@ func (a Action) HistoricResults(nagios *nagiosplugin.Check, command string) {
 			}
 			nagios.AddResult(n, fmt.Sprintf("%v/%v (historic)", a.Name, h.Rule))
 			nagios.AddLongPluginOutput(fmt.Sprintf("Reporting unhandled historic event %v for rule %v for action %v which occurred on %v", h.Uuid, h.Rule, a.Name, h.Timestamp))
+			if command != "" {
+				nagios.AddLongPluginOutput(command+ " -U " +  h.Uuid)
+			}
 			for _, l := range h.Lines {
 				nagios.AddLongPluginOutput(fmt.Sprintf("   %s", l))
 			}
-			if command != "" {
-				nagios.AddLongPluginOutput(command+ "-U " +  h.Uuid)
-			}
+
 			nagios.AddLongPluginOutput("\n")
 			hc++
 		}
