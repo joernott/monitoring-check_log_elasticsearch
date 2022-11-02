@@ -336,7 +336,7 @@ func (c *Check) ListHistory(Actions []string, HighlightUuid bool) error {
 			return err
 		}
 		fmt.Println(a.Name)
-		s.PrintHistory("", true, "", HighlightUuid)
+		s.PrintHistory("", true, "", HighlightUuid, c.Command)
 	}
 	return nil
 }

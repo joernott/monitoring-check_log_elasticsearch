@@ -212,7 +212,7 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string, All bool) {
 }
 
 // Print a formatted list of history entries to stdout.
-func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionFormat string, HighlightUuid bool) {
+func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionFormat string, HighlightUuid bool, Command string) {
 	logger := log.With().Str("func", "status.PrintHistory").Str("package", "check").Logger()
 	logger.Trace().Msg("Enter func")
 
@@ -239,6 +239,9 @@ func (status *StatusData) PrintHistory(Format string, Caption bool, CaptionForma
 			u="\033[34m" + u + "\033[0m"
 		}
 		fmt.Printf(Format, u, h.Timestamp, states[h.State], h.Counter, handled, h.Rule)
+		if Command != "" {
+			fmt.Printf("   %s -U %s\n", Command, h.Uuid)
+		}
 		for _, l := range h.Lines {
 			fmt.Printf("   %s\n", l)
 		}
