@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"time"
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/check_log_elasticsearch/elasticsearch"
@@ -337,6 +338,36 @@ func (c *Check) ListHistory(Actions []string, HighlightUuid bool) error {
 		}
 		fmt.Println(a.Name)
 		s.PrintHistory("", true, "", HighlightUuid, c.Command)
+	}
+	return nil
+}
+
+// Initializes the status file if it does not exist with the given timestamp
+func (c *Check) InitHistory(Timestamp string) error {
+	logger := log.With().Str("func", "InitHistory").Str("package", "check").Logger()
+	logger.Trace().String("timestamp", Timestamp).Msg("Enter func")
+
+	ts, err:=time.Parse(time.RFC3339,Timestamp)
+	if err != nil {
+		log.Error().Str("id", "ERR20140001").Str("timestamp", Timestamp).Err(err).Msg("Could not parse timestamp")
+		return err
+	}
+
+	for _, a := range c.actions.Actions {
+		_, err = os.Stat(a.StatusFile)
+		if errors.Is(err, os.ErrNotExist) {
+			data = new(StatusData)
+			data.Timestamp = time.Format("2006-01-02T15:04:05.000Z",ts)
+			logger.Debug().Str("id", "DBG2014001").Str("timestamp", data.Timestamp).Str("filename", a.StatusFile).Msg("No state file found,writing status file")
+			err:=data.Save(a.StatusFile)
+			if err != nil {
+				log.Error().Str("id", "ERR20140002").Str("timestamp", Timestamp).Str("filename", a.StatusFile).Err(err).Msg("Error saving status file")
+			}
+			return err
+		}
+		if err != nil {
+			log.Error().Str("id", "ERR20140003").Str("timestamp", Timestamp).Str("filename", a.StatusFile).Err(err).Msg("Unexpected Error opening status file")
+		}
 	}
 	return nil
 }
