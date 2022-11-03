@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"strings"
 	"time"
+	"os"
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/joernott/monitoring-check_log_elasticsearch/check_log_elasticsearch/elasticsearch"
@@ -348,7 +349,7 @@ func (c *Check) InitHistory(Timestamp string) error {
 	var err error
 
 	logger := log.With().Str("func", "InitHistory").Str("package", "check").Logger()
-	logger.Trace().String("timestamp", Timestamp).Msg("Enter func")
+	logger.Trace().Str("timestamp", Timestamp).Msg("Enter func")
 
 	if Timestamp == "" {
 		ts=time.Now()
@@ -363,8 +364,8 @@ func (c *Check) InitHistory(Timestamp string) error {
 	for _, a := range c.actions.Actions {
 		_, err = os.Stat(a.StatusFile)
 		if errors.Is(err, os.ErrNotExist) {
-			data = new(StatusData)
-			data.Timestamp = time.Format("2006-01-02T15:04:05.000Z",ts)
+			data := new(StatusData)
+			data.Timestamp = ts.Format("2006-01-02T15:04:05.000Z")
 			logger.Debug().Str("id", "DBG2014001").Str("timestamp", data.Timestamp).Str("filename", a.StatusFile).Msg("No state file found,writing status file")
 			err:=data.Save(a.StatusFile)
 			if err != nil {
