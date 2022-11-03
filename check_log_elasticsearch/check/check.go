@@ -344,13 +344,20 @@ func (c *Check) ListHistory(Actions []string, HighlightUuid bool) error {
 
 // Initializes the status file if it does not exist with the given timestamp
 func (c *Check) InitHistory(Timestamp string) error {
+	var ts time.Time
+	var err error
+
 	logger := log.With().Str("func", "InitHistory").Str("package", "check").Logger()
 	logger.Trace().String("timestamp", Timestamp).Msg("Enter func")
 
-	ts, err:=time.Parse(time.RFC3339,Timestamp)
-	if err != nil {
-		log.Error().Str("id", "ERR20140001").Str("timestamp", Timestamp).Err(err).Msg("Could not parse timestamp")
-		return err
+	if Timestamp == "" {
+		ts=time.Now()
+	} else {
+		ts, err=time.Parse(time.RFC3339,Timestamp)
+		if err != nil {
+			log.Error().Str("id", "ERR20140001").Str("timestamp", Timestamp).Err(err).Msg("Could not parse timestamp")
+			return err
+		}
 	}
 
 	for _, a := range c.actions.Actions {
