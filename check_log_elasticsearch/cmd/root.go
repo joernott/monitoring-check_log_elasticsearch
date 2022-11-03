@@ -92,6 +92,9 @@ var HighlightUuid bool
 // Global variable for cobra, show the rm/handle etc commands
 var ShowCommand bool
 
+// Global variable for cobra, timestamp for the init function to use as start
+var Timestamp string
+
 // Run the checkcommand
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
@@ -123,12 +126,16 @@ func init() {
 	rmCmd.PersistentFlags().StringSliceVarP(&Uuid, "uuid", "U", []string{}, "Remove entry with the given uuid from history")
 	handleCmd.PersistentFlags().BoolVarP(&All, "all", "A", false, "Clear all entries from history")
 	rmCmd.PersistentFlags().BoolVarP(&All, "all", "A", false, "Remove all entries from history")
+
 	listCmd.PersistentFlags().BoolVarP(&HighlightUuid, "highlight", "i", false, "Highlight UUID")
+
+	initCmd.PersistentFlags().StringVarP(&Timestamp, "timestamp", "t", "2m", "Timestamp in RFC3339 format, defaults to the current date/time")
 
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(handleCmd)
 	rootCmd.AddCommand(rmCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(initCmd)
 
 	viper.SetDefault("loglevel", "WARN")
 	viper.SetDefault("logfile", "/var/log/icinga2/check_log_elasticsearch.log")
@@ -148,7 +155,10 @@ func init() {
 
 	viper.SetDefault("uuid", []string{})
 	viper.SetDefault("all", false)
+
 	viper.SetDefault("highlight", false)
+
+	viper.SetDefault("timestamp", "")
 
 	viper.BindPFlag("loglevel", rootCmd.PersistentFlags().Lookup("loglevel"))
 	viper.BindPFlag("logfile", rootCmd.PersistentFlags().Lookup("logfile"))
@@ -170,7 +180,10 @@ func init() {
 	viper.BindPFlag("uuid", rmCmd.PersistentFlags().Lookup("uuid"))
 	viper.BindPFlag("all", handleCmd.PersistentFlags().Lookup("all"))
 	viper.BindPFlag("all", rmCmd.PersistentFlags().Lookup("all"))
+
 	viper.BindPFlag("highlight", listCmd.PersistentFlags().Lookup("highlight"))
+
+	viper.BindPFlag("timestamp", initCmd.PersistentFlags().Lookup("timestamp"))
 
 	viper.SetEnvPrefix("cle")
 	viper.BindEnv("password")

@@ -23,6 +23,7 @@ Available Commands:
   completion  Generate the autocompletion script for the specified shell
   handle      Handle a history entry
   help        Help about any command
+  init        Initialize the status file with the given timestamp
   list        List history entries
   rm          Remove a history entry
 
@@ -139,6 +140,30 @@ Global Flags:
   -C, --showcommand         Show the commands for handle etc.
 ```
 
+### Initialize status file(s)
+You can initialize the status files specified in the action file with a starting timestamp. This is very useful if you already have logs in elasticsearch
+when you roll out a new check and don't want it to go through all the past logsm since 1900-01-01. Depending on the volume of those past logs,
+it might even be necessary to do so, because if check_log_elasticsearch is killed due to a timeout, it won't write a status file and cause
+unnecessary load, every time it is started.
+
+If you don't provide a timestamp, the default is the current date/time. Existing status files will not be touched.
+
+```
+Usage:
+  check_log_elasticsearch init [flags]
+
+Flags:
+  -h, --help               help for init
+  -t, --timestamp string   Timestamp in RFC3339 format, defaults to the current date/time (default "2m")
+
+Global Flags:
+  -a, --action strings      Name(s) of action(s) to run (can be used multiple times, default is all, if no explicit actions are specified)
+  -f, --actionfile string   Action file (default "/etc/icinga2/check_log_elasticsearch/actions.yaml")
+  -c, --config string       Configuration file
+  -L, --logfile string      Log file (use - to log to stdout) (default "/var/log/icinga2/check_log_elasticsearch.log")
+  -l, --loglevel string     Log level (default "WARN")
+  -C, --showcommand         Show the commands for handle etc.
+```
 ## Action file
 
 The check uses the action file to specify where to search and how to match the elasticsearch results to multiple rules. This example contains one search in the syslog index and then has a rule for severity warning and one for the severities error, critical, alert and emergency. Every rule has an exclude pattern to ignore lines where the message contains "Dies ist ein Test"
@@ -211,3 +236,56 @@ A pattern consists of two fields:
 
 - *field* : This is the field in the elasticsearch hit. If you limit the returned fields in your query, make sure to include the fields you use in your pattern.
 - *regex* : A golang regular expression matching the [golang re2 syntax](https://github.com/google/re2/wiki/Syntax). TZhe value of the field will be matched against this regex
+
+
+## Useful puppet code
+
+### A defined type to deploy an action file from a template
+
+```puppet
+# @summary Install check_log_elasticsearch config
+#
+# Creates the action file for a check_log_elasticsearch check on the server where the check is executed
+#
+# @param template Name of the template for the configuration without file suffixes
+#
+# @param ensure Whether to install or remove the config
+#
+# @param config Parameters to fill the template with
+#
+# @param user User running the check. This is usually the user which is used by the icinga2 service
+#
+# @param group Group running the check. This is usually the group which is used by the icinga2 service
+#
+define monitoring::log_elasticsearch_action (
+  String                   $template,
+  Enum['absent','present'] $ensure = 'present',
+  Hash                     $config = {},
+  String                   $user   = lookup ('monitoring::icinga::common::icinga_user', String, 'first',"icinga"),
+  String                   $group  = lookup ('monitoring::icinga::common::icinga_group', String, 'first',"icinga"),
+) {
+  if $ensure == present {
+    $file_ensure = 'file'
+  } else {
+    $file_ensure = $ensure
+  }
+
+  $default_search = {}
+
+  file { "/etc/icinga2/check_log_elasticsearch/${title}.yaml":
+    ensure  => $file_ensure,
+    owner   => $user,
+    group   => $group,
+    mode    => '0640',
+    content => epp("${module_name}/check_log_elasticsearch/${template}.yaml.epp", $config),
+  }
+
+  if $ensure == present {
+    exec{ "/usr/lib64/nagios/plugins/check_log_elasticsearch init -f /etc/icinga2/check_log_elasticsearch/${title}.yaml"
+      user        => $user,
+      subscribe   => File["/etc/icinga2/check_log_elasticsearch/${title}.yaml"],
+      refreshonly => true,
+    }
+  }
+}
+```
