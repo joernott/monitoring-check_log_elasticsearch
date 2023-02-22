@@ -189,21 +189,23 @@ func (status *StatusData) HandleHistoryEntry(Uuids []string, All bool) {
 	logger.Trace().Msg("Enter func")
 
 	for _, h := range status.History {
+		logger.Trace().Str("id", "DBG1006001").Str("uuid", h.Uuid).Msg("Check history")
 		found := All
 		if found {
-			logger.Trace().Str("id", "DBG1006001").Str("uuid", h.Uuid).Msg("Handle all uuids")
+			logger.Trace().Str("id", "DBG1006002").Str("uuid", h.Uuid).Msg("Handle all uuids")
 		} else {
 			for _, u := range Uuids {
 				if h.Uuid == u {
-					logger.Trace().Str("id", "DBG1006001").Str("uuid", u).Msg("Handle uuid")
+					logger.Trace().Str("id", "DBG1006003").Str("uuid", u).Msg("Handle uuid")
 					found = true
 					break
 				} else {
-					logger.Trace().Str("id", "DBG1006002").Str("uuid", u).Str("compare_to", h.Uuid).Msg("No match")
+					logger.Trace().Str("id", "DBG1006004").Str("uuid", u).Str("compare_to", h.Uuid).Msg("No match")
 				}
 			}
 		}
-		if !found {
+		if found {
+			logger.Trace().Str("id", "DBG1006005").Str("uuid", h.Uuid).Bool("found", found).Msg("Set history entry to handled")
 			h.Handled = true
 		}
 		new = append(new, h)
